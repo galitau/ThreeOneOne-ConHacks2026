@@ -15,7 +15,7 @@ export default function Nav({ activePage, onNavigate }: NavProps) {
       height: 56,
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       padding: '0 28px',
-      background: 'rgba(8,10,15,0.85)',
+      background: 'rgba(255,255,255,0.85)',
       backdropFilter: 'blur(16px)',
       borderBottom: '1px solid var(--border)',
     }}>
@@ -45,7 +45,7 @@ export default function Nav({ activePage, onNavigate }: NavProps) {
       </div>
 
       {/* Links */}
-      <div style={{ display: 'flex', gap: 2 }}>
+      <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8, zIndex: 1001 }}>
         {['home', 'map', 'report'].map(page => (
           <button
             key={page}
@@ -64,21 +64,7 @@ export default function Nav({ activePage, onNavigate }: NavProps) {
         ))}
       </div>
 
-      {/* Live badge */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 7,
-        padding: '4px 12px', borderRadius: 100,
-        background: 'rgba(255,68,68,0.08)',
-        border: '1px solid rgba(255,68,68,0.25)',
-        fontSize: 11, fontWeight: 700, color: 'var(--red)',
-        fontFamily: 'var(--font-body)', letterSpacing: 0.8,
-      }}>
-        <div style={{
-          width: 5, height: 5, borderRadius: '50%', background: 'var(--red)',
-          animation: 'pulse-dot 1.5s ease-in-out infinite',
-        }} />
-        {highCount} CRITICAL
-      </div>
+      {/* Live badge removed per request */}
     </nav>
   );
 }

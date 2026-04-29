@@ -63,8 +63,8 @@ export function initClusters(opts: {
       'text-size': 13,
     },
     paint: {
-      'text-color': '#ffffff',
-      'text-halo-color': 'rgba(0,0,0,0.38)',
+      'text-color': '#1a1a1a',
+      'text-halo-color': 'rgba(255,255,255,0.86)',
       'text-halo-width': 1,
     },
   });

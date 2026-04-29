@@ -12,12 +12,7 @@ const avgCluster   = Math.round(totalReports / MOCK_INCIDENTS.length);
 
 const CONF_COLOR = { high: '#ff4444', medium: '#f5a623', low: '#6b7280' } as const;
 
-const HOW_IT_WORKS = [
-  { icon: '📡', title: 'Aggregate', body: 'Ingest posts from X, Bluesky, and citizen reports in real time. No single source is ever trusted alone.' },
-  { icon: '🧠', title: 'Classify', body: 'AI scans every signal for real-world hazards — floods, downed lines, fallen trees, blocked roads.' },
-  { icon: '📍', title: 'Cluster', body: 'Reports within 300m and 2 hours merge into one incident — eliminating noise and duplicates.' },
-  { icon: '📊', title: 'Score', body: 'Each incident gets a confidence score based on report count, images, source diversity, and recency.' },
-];
+// The "How it works" pipeline content removed per request
 
 // ── Ticker ────────────────────────────────────────────────────────────────────
 function Ticker() {
@@ -124,7 +119,7 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
   });
 
   return (
-    <div style={{ paddingTop: 56 }}>
+    <div style={{ paddingTop: 56, background: 'var(--bg1)' }}>
 
       {/* ── HERO ── */}
       <section ref={heroRef} style={{
@@ -142,18 +137,18 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
               height: '100%',
               objectFit: 'cover',
               objectPosition: 'center center',
-              filter: 'brightness(0.88) saturate(0.9)',
+              filter: 'brightness(1.15) saturate(0.85)',
               transform: 'none',
             }}
           />
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(5,8,20,0.08) 0%, rgba(5,8,20,0.18) 100%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.18) 100%)' }} />
           <div style={{ position: 'absolute', inset: 0, backgroundImage: `linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)`, backgroundSize: '44px 44px', opacity: 0.1 }} />
         </div>
         {/* Glow */}
         <div style={{
           position: 'absolute', top: '15%', left: '50%', transform: 'translateX(-50%)',
           width: 700, height: 500, pointerEvents: 'none',
-          background: 'radial-gradient(ellipse at center, rgba(0,200,240,0.07) 0%, transparent 65%)',
+          background: 'radial-gradient(ellipse at center, rgba(255,68,68,0.07) 0%, transparent 65%)',
         }} />
         {/* Scanline effect */}
         <div style={{
@@ -173,10 +168,10 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
           position: 'relative',
           zIndex: 1,
           transform: 'translateY(-18px)',
-          background: 'rgba(6, 10, 24, 0.58)',
-          border: '1px solid rgba(255, 255, 255, 0.16)',
+          background: 'rgba(255, 255, 255, 0.64)',
+          border: '1px solid rgba(0, 0, 0, 0.08)',
           borderRadius: 20,
-          boxShadow: '0 24px 70px rgba(0, 0, 0, 0.42)',
+          boxShadow: '0 18px 40px rgba(0, 0, 0, 0.06)',
         }}>
 
           {/* Headline */}
@@ -185,8 +180,8 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
             fontFamily: 'var(--font-display)', fontWeight: 700,
             fontSize: 'clamp(40px, 6.2vw, 74px)', lineHeight: 1.12,
             letterSpacing: -1.1, marginBottom: 24,
-            color: '#fff',
-            textShadow: '0 2px 18px rgba(0, 0, 0, 0.65)',
+            color: '#000',
+            textShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
           }}>
             Cities that see<br />
             <span style={{ color: 'var(--accent)' }}>threats coming</span><br />
@@ -196,9 +191,9 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
           {/* Subhead */}
           <p style={{
             ...fadeStyle(160),
-            fontSize: 17, color: 'rgba(255,255,255,0.96)', lineHeight: 1.75,
+            fontSize: 17, color: 'rgba(0,0,0,0.72)', lineHeight: 1.75,
             maxWidth: 520, margin: '0 auto 44px',
-            textShadow: '0 2px 14px rgba(0, 0, 0, 0.72)',
+            textShadow: '0 1px 2px rgba(0, 0, 0, 0.06)',
           }}>
             ThreeOneOne aggregates social signals and citizen reports to surface verified hazards — before a single 311 call is made.
           </p>
@@ -209,11 +204,11 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
               onClick={() => onNavigate('map')}
               style={{
                 padding: '13px 30px', borderRadius: 8, border: 'none',
-                background: 'var(--accent)', color: '#000',
+                background: 'var(--accent)', color: '#fff',
                 fontWeight: 700, fontSize: 14, fontFamily: 'var(--font-body)',
                 transition: 'all 0.15s',
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#33d4f5'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#ff6b6b'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.transform = 'none'; }}
             >
               Open Live Map →
@@ -239,7 +234,7 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
       <Ticker />
 
       {/* ── STATS ── */}
-      <div style={{ ...fadeStyle(320), display: 'flex', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ ...fadeStyle(320), display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg2)' }}>
         <StatCard num={MOCK_INCIDENTS.length} label="Active Incidents" />
         <StatCard num={highCount} label="Critical" accent="var(--red)" />
         <StatCard num={totalReports} label="Reports Processed" />
@@ -253,7 +248,7 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
       </div>
 
       {/* ── LIVE MAP + INCIDENT FEED ── */}
-      <section style={{ padding: '80px 40px', maxWidth: 1280, margin: '0 auto' }}>
+      <section style={{ padding: '80px 40px', maxWidth: 1280, margin: '0 auto', background: 'var(--bg1)', borderRadius: 12 }}>
         <div style={{ marginBottom: 40 }}>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: 'var(--accent)', textTransform: 'uppercase', marginBottom: 10, fontFamily: 'monospace' }}>
             Live Intelligence
@@ -273,7 +268,7 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
             <div style={{
               position: 'absolute', top: 14, left: 14, zIndex: 500,
               display: 'flex', alignItems: 'center', gap: 7,
-              background: 'rgba(8,10,15,0.85)', backdropFilter: 'blur(10px)',
+              background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(10px)',
               border: '1px solid var(--border2)',
               borderRadius: 8, padding: '7px 12px',
               fontSize: 11, fontWeight: 700, color: 'var(--green)',
@@ -286,7 +281,7 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
             {/* Legend */}
             <div style={{
               position: 'absolute', bottom: 14, left: 14, zIndex: 500,
-              background: 'rgba(8,10,15,0.85)', backdropFilter: 'blur(10px)',
+              background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(10px)',
               border: '1px solid var(--border2)',
               borderRadius: 8, padding: '8px 12px',
               display: 'flex', flexDirection: 'column', gap: 5,
@@ -327,63 +322,14 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
         </div>
       </section>
 
-      {/* ── HOW IT WORKS ── */}
-      <section style={{
-        padding: '80px 40px',
-        background: 'var(--bg1)',
-        borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
-      }}>
-        <div style={{ maxWidth: 1280, margin: '0 auto' }}>
-          <div style={{ marginBottom: 48 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: 'var(--accent)', textTransform: 'uppercase', marginBottom: 10, fontFamily: 'monospace' }}>
-              The pipeline
-            </div>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 700, letterSpacing: -0.7, lineHeight: 1.2 }}>
-              Signal → Intelligence → Action
-            </h2>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-            {HOW_IT_WORKS.map((step, i) => (
-              <div
-                key={i}
-                style={{
-                  background: 'var(--bg2)', border: '1px solid var(--border)',
-                  borderRadius: 12, padding: 28,
-                  transition: 'border-color 0.2s, transform 0.2s',
-                  cursor: 'default',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border3)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'none'; }}
-              >
-                {/* Step number */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                  <div style={{
-                    width: 42, height: 42, borderRadius: 10,
-                    background: 'var(--accent-dim)', border: '1px solid rgba(0,200,240,0.15)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
-                  }}>{step.icon}</div>
-                  <span style={{
-                    fontFamily: 'monospace', fontSize: 11, fontWeight: 700,
-                    color: 'var(--text3)', letterSpacing: 1,
-                  }}>0{i + 1}</span>
-                </div>
-                <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 17, marginBottom: 8, letterSpacing: 0 }}>
-                  {step.title}
-                </h3>
-                <p style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.7 }}>{step.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* The pipeline section removed per request */}
 
       {/* ── CTA STRIP ── */}
       <section style={{ padding: '80px 40px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
         <div style={{
           position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
           width: 600, height: 300, pointerEvents: 'none',
-          background: 'radial-gradient(ellipse, rgba(0,200,240,0.06) 0%, transparent 70%)',
+          background: 'radial-gradient(ellipse, rgba(255,68,68,0.06) 0%, transparent 70%)',
         }} />
         <div style={{ position: 'relative', maxWidth: 560, margin: '0 auto' }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 4vw, 46px)', fontWeight: 700, letterSpacing: -0.8, lineHeight: 1.18, marginBottom: 16 }}>
@@ -400,7 +346,7 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
               fontWeight: 700, fontSize: 15, fontFamily: 'var(--font-body)',
               transition: 'all 0.15s',
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = '#33d4f5'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#ff7777'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = 'var(--accent)'; e.currentTarget.style.transform = 'none'; }}
           >
             Submit a Report
