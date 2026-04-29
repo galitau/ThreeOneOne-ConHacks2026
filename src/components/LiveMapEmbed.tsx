@@ -496,7 +496,7 @@ export default function LiveMapEmbed({
       style={{
         width: '100%',
         height: typeof height === 'number' ? `${height}px` : height,
-        minHeight: '620px',
+        minHeight: typeof height === 'number' ? `${height}px` : height,
         background: '#111',
         position: 'relative',
       }}
