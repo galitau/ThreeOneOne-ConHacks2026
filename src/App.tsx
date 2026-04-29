@@ -1,14 +1,8 @@
 import { useState } from 'react';
 import './index.css';
 import Nav from './components/Nav';
-import Home from './pages/home';
-
-// Placeholder stubs — build these out next
-const MapPage = () => (
-  <div style={{ paddingTop: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text2)' }}>
-    Map dashboard coming soon
-  </div>
-);
+import Home from './pages/Home';
+import MapPage from './pages/Map';
 const ReportPage = () => (
   <div style={{ paddingTop: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text2)' }}>
     Report form coming soon
