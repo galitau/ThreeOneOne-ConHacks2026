@@ -245,10 +245,10 @@ export default function Report({ onNavigate }: ReportProps) {
           Report hazard
         </div>
         <h1 style={{ color: 'var(--text-primary)', fontSize: 32, lineHeight: 1.15, marginBottom: 10 }}>
-          Tell us what happened
+          Report a problem nearby
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6 }}>
-          Add a short description, location, and optional photo. AI will classify the report and match it with nearby incidents.
+          Describe the issue, set its location on the map, and attach a photo so it can be reviewed.
         </p>
       </div>
 
@@ -319,9 +319,9 @@ export default function Report({ onNavigate }: ReportProps) {
         <ImagePlus size={22} color="var(--accent-red)" />
         <div style={{ flex: 1 }}>
           <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 700 }}>
-            {form.image ? form.image.name : 'Upload photo'}
+            {form.image ? form.image.name : 'Required photo'}
           </div>
-          <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>Required, helps AI verify the hazard.</div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>Add a clear photo of the issue before submitting.</div>
           {imageError ? (
             <div role="alert" style={{ color: 'var(--accent-red)', fontSize: 12, fontWeight: 700, marginTop: 6 }}>
               {imageError}
