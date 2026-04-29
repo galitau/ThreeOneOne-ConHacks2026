@@ -6,6 +6,11 @@ import type { Incident, Confidence } from '../data/incidents';
 import { makeDescription } from './Description';
 import { initClusters } from './Circles';
 
+interface ReportLocation {
+  lat: number;
+  lon: number;
+}
+
 const CONF_COLOR: Record<Confidence, string> = {
   high: '#ff4444',
   medium: '#f5a623',
@@ -20,6 +25,8 @@ interface Props {
   focusIncidentId?: number | null;
   onIncidentClick?: (inc: Incident) => void;
   onMapClick?: () => void;
+  reportLocation?: ReportLocation | null;
+  onReportLocationChange?: (location: ReportLocation) => void;
 }
 
 const makeIncidentSourceData = (incidents: Incident[]) => ({
@@ -65,6 +72,64 @@ const flyToIncident = (map: MapboxMap, incident: Incident) => {
   });
 };
 
+const createReportPin = () => {
+  const marker = document.createElement('button');
+  marker.type = 'button';
+  marker.setAttribute('aria-label', 'Report location pin');
+  marker.style.cssText = `
+    position: relative;
+    width: 42px;
+    height: 56px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: grab;
+    outline: none;
+    transition: filter 160ms ease, opacity 160ms ease;
+    filter: drop-shadow(0 14px 18px rgba(0, 0, 0, 0.34));
+  `;
+
+  marker.innerHTML = `
+    <svg viewBox="0 0 42 56" width="42" height="56" aria-hidden="true" focusable="false" style="display:block; overflow: visible;">
+      <defs>
+        <radialGradient id="report-pin-halo" cx="50%" cy="45%" r="62%">
+          <stop offset="0%" stop-color="rgba(255,255,255,0.9)" />
+          <stop offset="28%" stop-color="rgba(255,255,255,0.35)" />
+          <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+        </radialGradient>
+        <linearGradient id="report-pin-body" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#ffffff" />
+          <stop offset="18%" stop-color="#f87171" />
+          <stop offset="100%" stop-color="#b91c1c" />
+        </linearGradient>
+      </defs>
+      <ellipse cx="21" cy="18" rx="14" ry="14" fill="url(#report-pin-halo)" opacity="0.82" />
+      <path d="M21 3.5C13 3.5 6.5 10 6.5 18c0 10.5 14.5 34.5 14.5 34.5S35.5 28.5 35.5 18C35.5 10 29 3.5 21 3.5Z" fill="url(#report-pin-body)" stroke="rgba(255,255,255,0.22)" stroke-width="1.1" />
+      <circle cx="21" cy="18" r="7.4" fill="rgba(255,255,255,0.18)" />
+      <circle cx="21" cy="18" r="4.7" fill="#fff" />
+      <circle cx="18.6" cy="15.7" r="1.5" fill="rgba(255,255,255,0.85)" />
+    </svg>
+  `;
+
+  marker.onmouseenter = () => {
+    marker.style.filter = 'drop-shadow(0 18px 24px rgba(0, 0, 0, 0.42))';
+  };
+
+  marker.onmouseleave = () => {
+    marker.style.filter = 'drop-shadow(0 14px 18px rgba(0, 0, 0, 0.34))';
+  };
+
+  marker.onmousedown = () => {
+    marker.style.cursor = 'grabbing';
+  };
+
+  marker.onmouseup = () => {
+    marker.style.cursor = 'grab';
+  };
+
+  return marker;
+};
+
 const fitToIncidents = (map: MapboxMap, incidents: Incident[]) => {
   if (incidents.length === 0) return;
 
@@ -99,13 +164,17 @@ export default function LiveMapEmbed({
   focusIncidentId = null,
   onIncidentClick,
   onMapClick,
+  reportLocation = null,
+  onReportLocationChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapboxMap | null>(null);
   const onIncidentClickRef = useRef(onIncidentClick);
   const onMapClickRef = useRef(onMapClick);
+  const onReportLocationChangeRef = useRef(onReportLocationChange);
   const selectedHazardTypeRef = useRef<string | null>(selectedHazardType);
   const markerEntriesRef = useRef<Array<{ marker: mapboxgl.Marker; incident: Incident }>>([]);
+  const reportMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const updateMarkerVisibilityRef = useRef<(() => void) | null>(null);
 
   const CLUSTER_ZOOM = 13.5;
@@ -119,9 +188,20 @@ export default function LiveMapEmbed({
   }, [onMapClick]);
 
   useEffect(() => {
+    onReportLocationChangeRef.current = onReportLocationChange;
+  }, [onReportLocationChange]);
+
+  useEffect(() => {
     selectedHazardTypeRef.current = selectedHazardType;
     updateMarkerVisibilityRef.current?.();
   }, [selectedHazardType]);
+
+  useEffect(() => {
+    const marker = reportMarkerRef.current;
+    if (!marker || !reportLocation) return;
+
+    marker.setLngLat([reportLocation.lon, reportLocation.lat]);
+  }, [reportLocation]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -187,8 +267,23 @@ export default function LiveMapEmbed({
     let handleClusterMouseEnter: (() => void) | null = null;
     let handleClusterMouseLeave: (() => void) | null = null;
     let clustersCleanup: (() => void) | null = null;
+    let reportMarker: mapboxgl.Marker | null = null;
 
     const incidentSourceData = makeIncidentSourceData(incidents);
+    const reportMode = Boolean(onReportLocationChangeRef.current);
+
+    const updateReportLocation = (location: ReportLocation) => {
+      if (!reportMarker) return;
+
+      reportMarker.setLngLat([location.lon, location.lat]);
+      onReportLocationChangeRef.current?.(location);
+      map.easeTo({
+        center: [location.lon, location.lat],
+        zoom: Math.max(map.getZoom(), 15.5),
+        duration: 800,
+        essential: true,
+      });
+    };
 
     const createIncidentPin = (confidence: Confidence) => {
       const color = CONF_COLOR[confidence];
@@ -321,6 +416,26 @@ export default function LiveMapEmbed({
         setCurrentDetail: (el) => (currentDetail = el),
       }).cleanup;
 
+      if (reportMode) {
+        const reportPin = createReportPin();
+        reportMarker = new mapboxgl.Marker({
+          element: reportPin,
+          draggable: true,
+          anchor: 'bottom',
+        })
+          .setLngLat([reportLocation?.lon ?? -79.3832, reportLocation?.lat ?? 43.6532])
+          .addTo(map);
+
+        reportMarker.on('dragend', () => {
+          const lngLat = reportMarker?.getLngLat();
+          if (!lngLat) return;
+
+          onReportLocationChangeRef.current?.({ lat: lngLat.lat, lon: lngLat.lng });
+        });
+
+        reportMarkerRef.current = reportMarker;
+      }
+
       // 📍 Incidents
       incidents.forEach((incident) => {
         const markerElement = createIncidentPin(incident.conf);
@@ -447,6 +562,12 @@ export default function LiveMapEmbed({
       const handleMapClick = (event: mapboxgl.MapMouseEvent) => {
         const clusterFeatures = map.queryRenderedFeatures(event.point, { layers: ['incident-clusters'] });
         if (clusterFeatures.length > 0) return;
+
+        if (reportMode && onReportLocationChangeRef.current) {
+          updateReportLocation({ lat: event.lngLat.lat, lon: event.lngLat.lng });
+          return;
+        }
+
         onMapClickRef.current?.();
       };
 
@@ -481,6 +602,9 @@ export default function LiveMapEmbed({
       }
 
       if (clustersCleanup) clustersCleanup();
+
+      if (reportMarker) reportMarker.remove();
+      reportMarkerRef.current = null;
 
       incidentMarkers.forEach((marker) => marker.remove());
       markerEntriesRef.current = [];

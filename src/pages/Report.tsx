@@ -13,6 +13,11 @@ interface BoundingBox {
   label?: string;
 }
 
+interface ReportLocation {
+  lat: number;
+  lon: number;
+}
+
 interface JoinedIncident {
   id?: string | number;
   hazard_type?: string;
@@ -25,6 +30,9 @@ interface JoinedIncident {
   image?: {
     bounding_boxes?: BoundingBox[];
   };
+  location?: ReportLocation;
+  description?: string;
+  image_name?: string;
 }
 
 interface Classification {
@@ -53,10 +61,6 @@ const loadingMessages = [
   'Almost done...',
 ];
 
-const FRONTEND_ONLY_SUBMIT = true;
-
-const wait = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
-
 const formatHazard = (value?: string) => {
   if (!value) return 'Hazard';
   return value
@@ -84,18 +88,6 @@ const tierColor = (tier: ConfidenceTier) => {
   if (tier === 'MEDIUM') return 'var(--accent-amber)';
   return '#6B7280';
 };
-
-const createMockReportResponse = (): ReportResponse => ({
-  status: 'joined_incident',
-  incident: {
-    id: `local-${Date.now()}`,
-    hazard_type: 'User Report',
-    confidence_score: 0.86,
-    confidence_tier: 'HIGH',
-    report_count: 1,
-    bounding_boxes: [],
-  },
-});
 
 function ResultShell({ children }: { children: React.ReactNode }) {
   return (
@@ -195,18 +187,6 @@ export default function Report({ onNavigate }: ReportProps) {
     console.log('[ReportForm] POSTing to:', url);
 
     try {
-      if (FRONTEND_ONLY_SUBMIT) {
-        console.log('[ReportForm] Frontend-only mode enabled. Skipping backend POST.');
-        console.log('[ReportForm] FormData fields:', Array.from(formData.entries()));
-        await wait(900);
-
-        const data = createMockReportResponse();
-        console.log('[ReportForm] Mock response:', data);
-        setResponse(data);
-        setView('result');
-        return;
-      }
-
       const res = await fetch(url, {
         method: 'POST',
         body: formData,
@@ -278,7 +258,7 @@ export default function Report({ onNavigate }: ReportProps) {
           <div>
             <div style={{ color: 'var(--text-primary)', fontSize: 13, fontWeight: 700 }}>Location</div>
             <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 4 }}>
-              Drag the pin on the map to set the location
+              Click or drag the pin on the map to set the location
             </div>
             <div style={{ color: '#6B7280', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace', fontSize: 12, marginTop: 6 }}>
               {lat.toFixed(4)}, {lon.toFixed(4)}
