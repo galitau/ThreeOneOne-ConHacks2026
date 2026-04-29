@@ -1,0 +1,11 @@
+python-dotenv
+fastapi 
+uvicorn 
+pillow 
+torch 
+torchvision
+git+https://github.com/openai/CLIP.git
+google-genai
+scikit-learn
+python-multipart
+snowflake-connector-python
