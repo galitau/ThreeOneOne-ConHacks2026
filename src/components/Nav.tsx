@@ -1,14 +1,9 @@
-import { useMemo } from 'react';
-import { MOCK_INCIDENTS } from '../data/incidents';
-
 interface NavProps {
   activePage: string;
   onNavigate: (page: string) => void;
 }
 
 export default function Nav({ activePage, onNavigate }: NavProps) {
-  const highCount = useMemo(() => MOCK_INCIDENTS.filter(i => i.conf === 'high').length, []);
-
   return (
     <nav style={{
       position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000,
