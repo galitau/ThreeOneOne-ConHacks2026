@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import LiveMapEmbed from '../components/LiveMapEmbed';
 import { MOCK_INCIDENTS } from '../data/incidents';
 import type { Incident } from '../data/incidents';
+import cityBg from '../../cityfinal.png';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const totalReports = MOCK_INCIDENTS.reduce((a, i) => a + i.reports, 0);
@@ -127,19 +128,27 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
 
       {/* ── HERO ── */}
       <section ref={heroRef} style={{
-        position: 'relative', minHeight: '92vh',
+        position: 'relative', minHeight: '100vh',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         overflow: 'hidden',
       }}>
-        {/* Grid bg */}
-        <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          backgroundImage: `
-            linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)
-          `,
-          backgroundSize: '44px 44px',
-        }} />
+        {/* Background image */}
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: '#fff' }}>
+          <img
+            src={cityBg}
+            alt="City background"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              objectPosition: 'center center',
+              filter: 'brightness(0.88) saturate(0.9)',
+              transform: 'none',
+            }}
+          />
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(5,8,20,0.08) 0%, rgba(5,8,20,0.18) 100%)' }} />
+          <div style={{ position: 'absolute', inset: 0, backgroundImage: `linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)`, backgroundSize: '44px 44px', opacity: 0.1 }} />
+        </div>
         {/* Glow */}
         <div style={{
           position: 'absolute', top: '15%', left: '50%', transform: 'translateX(-50%)',
@@ -157,17 +166,18 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
         </div>
 
         {/* Content */}
-        <div style={{ textAlign: 'center', padding: '0 24px', maxWidth: 860, position: 'relative', zIndex: 1 }}>
-          {/* Tag */}
-          <div style={{ ...fadeStyle(0), display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 28,
-            padding: '5px 16px', borderRadius: 100,
-            background: 'var(--accent-dim)', border: '1px solid rgba(0,200,240,0.2)',
-            fontSize: 11, fontWeight: 600, color: 'var(--accent)',
-            letterSpacing: 1.2, textTransform: 'uppercase', fontFamily: 'var(--font-body)',
-          }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', animation: 'pulse-dot 2s ease-in-out infinite' }} />
-            Real-time hazard intelligence
-          </div>
+        <div style={{
+          textAlign: 'center',
+          padding: '28px 28px 30px',
+          maxWidth: 900,
+          position: 'relative',
+          zIndex: 1,
+          transform: 'translateY(-18px)',
+          background: 'rgba(6, 10, 24, 0.58)',
+          border: '1px solid rgba(255, 255, 255, 0.16)',
+          borderRadius: 20,
+          boxShadow: '0 24px 70px rgba(0, 0, 0, 0.42)',
+        }}>
 
           {/* Headline */}
           <h1 style={{
@@ -175,6 +185,8 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
             fontFamily: 'var(--font-display)', fontWeight: 700,
             fontSize: 'clamp(40px, 6.2vw, 74px)', lineHeight: 1.12,
             letterSpacing: -1.1, marginBottom: 24,
+            color: '#fff',
+            textShadow: '0 2px 18px rgba(0, 0, 0, 0.65)',
           }}>
             Cities that see<br />
             <span style={{ color: 'var(--accent)' }}>threats coming</span><br />
@@ -184,8 +196,9 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
           {/* Subhead */}
           <p style={{
             ...fadeStyle(160),
-            fontSize: 17, color: 'var(--text2)', lineHeight: 1.75,
+            fontSize: 17, color: 'rgba(255,255,255,0.96)', lineHeight: 1.75,
             maxWidth: 520, margin: '0 auto 44px',
+            textShadow: '0 2px 14px rgba(0, 0, 0, 0.72)',
           }}>
             ThreeOneOne aggregates social signals and citizen reports to surface verified hazards — before a single 311 call is made.
           </p>
