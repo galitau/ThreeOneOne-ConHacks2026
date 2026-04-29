@@ -64,6 +64,14 @@ button { cursor: pointer; font-family: var(--font-body); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
+.scrollbar-hide {
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Leaflet dark overrides */
 .leaflet-container {
   background: #080a0f;

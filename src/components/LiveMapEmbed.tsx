@@ -4,7 +4,6 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { MOCK_INCIDENTS } from '../data/incidents';
 import type { Incident, Confidence } from '../data/incidents';
 import { makeDescription } from './Description';
-import { makeDetailedDescription } from './DetailedDescription';
 import { initClusters } from './Circles';
 
 const CONF_COLOR: Record<Confidence, string> = {
@@ -14,26 +13,145 @@ const CONF_COLOR: Record<Confidence, string> = {
 };
 
 interface Props {
-  height?: number;
+  height?: number | string;
+  focusIncident?: Incident | null;
+  focusRequest?: number;
+  selectedHazardType?: string | null;
+  viewRequest?: number;
   onIncidentClick?: (inc: Incident) => void;
+  onMapClick?: () => void;
 }
 
-export default function LiveMapEmbed({ height = 600, onIncidentClick }: Props) {
+const makeIncidentSourceData = (incidents: Incident[]) => ({
+  type: 'FeatureCollection' as const,
+  features: incidents.map((incident) => ({
+    type: 'Feature' as const,
+    geometry: {
+      type: 'Point' as const,
+      coordinates: [incident.lng, incident.lat],
+    },
+    properties: {
+      id: incident.id,
+      type: incident.type,
+      confidence: incident.conf,
+      emergencyScore: incident.conf === 'high' ? 3 : incident.conf === 'medium' ? 2 : 1,
+      reports: incident.reports,
+      score: incident.score,
+      icon: incident.icon,
+      time: incident.time,
+      desc: incident.desc,
+    },
+  })),
+});
+
+const matchesHazardType = (incident: Incident, selectedHazardType: string | null) => {
+  if (!selectedHazardType) return true;
+
+  if (selectedHazardType === 'Other') {
+    return !['Flooding', 'Fallen Tree', 'Downed Power Line', 'Traffic Hazard'].includes(incident.type);
+  }
+
+  return incident.type === selectedHazardType;
+};
+
+const flyToIncident = (map: MapboxMap, incident: Incident) => {
+  map.flyTo({
+    center: [incident.lng, incident.lat],
+    zoom: 16,
+    pitch: map.getPitch(),
+    bearing: map.getBearing(),
+    duration: 1200,
+    essential: true,
+  });
+};
+
+const fitToIncidents = (map: MapboxMap, incidents: Incident[]) => {
+  if (incidents.length === 0) return;
+
+  if (incidents.length === 1) {
+    flyToIncident(map, incidents[0]);
+    return;
+  }
+
+  const bounds = new mapboxgl.LngLatBounds();
+  incidents.forEach((incident) => {
+    bounds.extend([incident.lng, incident.lat]);
+  });
+
+  map.fitBounds(bounds, {
+    padding: 80,
+    pitch: map.getPitch(),
+    bearing: map.getBearing(),
+    duration: 1200,
+    essential: true,
+  } as mapboxgl.FitBoundsOptions);
+};
+
+export default function LiveMapEmbed({
+  height = 600,
+  focusIncident,
+  focusRequest = 0,
+  selectedHazardType = null,
+  viewRequest = 0,
+  onIncidentClick,
+  onMapClick,
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapboxMap | null>(null);
+  const onIncidentClickRef = useRef(onIncidentClick);
+  const onMapClickRef = useRef(onMapClick);
+  const selectedHazardTypeRef = useRef<string | null>(selectedHazardType);
+  const markerEntriesRef = useRef<Array<{ marker: mapboxgl.Marker; incident: Incident }>>([]);
+  const updateMarkerVisibilityRef = useRef<(() => void) | null>(null);
 
   const CLUSTER_ZOOM = 13.5;
 
   useEffect(() => {
+    onIncidentClickRef.current = onIncidentClick;
+  }, [onIncidentClick]);
+
+  useEffect(() => {
+    onMapClickRef.current = onMapClick;
+  }, [onMapClick]);
+
+  useEffect(() => {
+    selectedHazardTypeRef.current = selectedHazardType;
+  }, [selectedHazardType]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || viewRequest === 0) return;
+
+    const applyHazardFilter = () => {
+      const filteredIncidents = selectedHazardType
+        ? MOCK_INCIDENTS.filter((incident) => matchesHazardType(incident, selectedHazardType))
+        : MOCK_INCIDENTS;
+      const source = map.getSource('incidents') as mapboxgl.GeoJSONSource | undefined;
+
+      selectedHazardTypeRef.current = selectedHazardType;
+      source?.setData(makeIncidentSourceData(filteredIncidents));
+      updateMarkerVisibilityRef.current?.();
+      fitToIncidents(map, filteredIncidents);
+    };
+
+    if (map.loaded()) {
+      applyHazardFilter();
+      return;
+    }
+
+    map.once('load', applyHazardFilter);
+    return () => {
+      map.off('load', applyHazardFilter);
+    };
+  }, [selectedHazardType, viewRequest, focusIncident, focusRequest]);
+
+  useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    // ✅ Load token from .env
     const token = import.meta.env.VITE_MAPBOX_TOKEN;
 
-    console.log("MAPBOX TOKEN:", token);
-
     if (!token) {
-      console.error("❌ Mapbox token missing. Check your .env file.");
+      console.error('Mapbox token missing. Check your .env file.');
       return;
     }
 
@@ -46,35 +164,8 @@ export default function LiveMapEmbed({ height = 600, onIncidentClick }: Props) {
     let handleClusterMouseEnter: (() => void) | null = null;
     let handleClusterMouseLeave: (() => void) | null = null;
     let clustersCleanup: (() => void) | null = null;
-    const repositionDetail = (detailEl: HTMLElement | null, inc?: { lng: number; lat: number }) => {
-      if (!detailEl || !inc) return;
-      const p = map.project([inc.lng, inc.lat]);
-      detailEl.style.left = `${p.x}px`;
-      detailEl.style.top = `${p.y}px`;
-      detailEl.style.transform = 'translate(-50%, -115%)';
-    };
 
-    const incidentSourceData = {
-      type: 'FeatureCollection' as const,
-      features: MOCK_INCIDENTS.map((incident) => ({
-        type: 'Feature' as const,
-        geometry: {
-          type: 'Point' as const,
-          coordinates: [incident.lng, incident.lat],
-        },
-        properties: {
-          id: incident.id,
-          type: incident.type,
-          confidence: incident.conf,
-          emergencyScore: incident.conf === 'high' ? 3 : incident.conf === 'medium' ? 2 : 1,
-          reports: incident.reports,
-          score: incident.score,
-          icon: incident.icon,
-          time: incident.time,
-          desc: incident.desc,
-        },
-      })),
-    };
+    const incidentSourceData = makeIncidentSourceData(MOCK_INCIDENTS);
 
     const createIncidentPin = (confidence: Confidence) => {
       const color = CONF_COLOR[confidence];
@@ -137,10 +228,10 @@ export default function LiveMapEmbed({ height = 600, onIncidentClick }: Props) {
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: 'mapbox://styles/mapbox/streets-v12',
-      center: [-79.3832, 43.6532], // Toronto
-      zoom: 14.5,
-      pitch: 65,
-      bearing: -20,
+      center: [-79.3832, 43.6532],
+      zoom: 14.8,
+      pitch: 68,
+      bearing: -24,
       antialias: true,
     });
 
@@ -225,8 +316,9 @@ export default function LiveMapEmbed({ height = 600, onIncidentClick }: Props) {
           if (t) { t.remove(); tooltipMap.delete(markerElement); }
         });
 
-        markerElement.addEventListener('click', () => {
-          onIncidentClick?.(incident);
+        markerElement.addEventListener('click', (event) => {
+          event.stopPropagation();
+          onIncidentClickRef.current?.(incident);
 
           // remove all hover tooltips
           for (const t of tooltipMap.values()) t.remove();
@@ -245,36 +337,6 @@ export default function LiveMapEmbed({ height = 600, onIncidentClick }: Props) {
             currentDetail = null;
           }
 
-          // create and position detailed card
-          const detail = makeDetailedDescription(incident);
-          const cont = containerRef.current;
-          if (cont) {
-            detail.style.position = 'absolute';
-            cont.appendChild(detail);
-            currentDetail = detail;
-            repositionDetail(detail, { lng: incident.lng, lat: incident.lat });
-            // keep it positioned during map moves/zooms
-            const moveHandler = () => repositionDetail(detail, { lng: incident.lng, lat: incident.lat });
-            const zoomHandler = moveHandler;
-            const closeHandler = () => {
-              map.off('move', moveHandler);
-              map.off('zoom', zoomHandler);
-              detail.remove();
-              detailHandlers.delete(detail);
-              if (currentDetail === detail) currentDetail = null;
-            };
-            map.on('move', moveHandler);
-            map.on('zoom', zoomHandler);
-            detail.addEventListener('detail:close', closeHandler);
-            detailHandlers.set(detail, { move: moveHandler, zoom: zoomHandler, close: closeHandler });
-          }
-          map.flyTo({
-            center: [incident.lng, incident.lat],
-            zoom: 17,
-            pitch: 70,
-            bearing: -30,
-            speed: 0.8,
-          });
         });
 
         const marker = new mapboxgl.Marker({
@@ -285,13 +347,16 @@ export default function LiveMapEmbed({ height = 600, onIncidentClick }: Props) {
           .addTo(map);
 
         incidentMarkers.push(marker);
+        markerEntriesRef.current.push({ marker, incident });
       });
 
       updateMarkerVisibility = () => {
         const showPins = map.getZoom() >= CLUSTER_ZOOM;
+        const activeHazard = selectedHazardTypeRef.current;
 
-        incidentMarkers.forEach((marker) => {
-          marker.getElement().style.display = showPins ? '' : 'none';
+        markerEntriesRef.current.forEach(({ marker, incident }) => {
+          const matchesHazard = matchesHazardType(incident, activeHazard);
+          marker.getElement().style.display = showPins && matchesHazard ? '' : 'none';
         });
 
         if (!showPins) {
@@ -314,6 +379,7 @@ export default function LiveMapEmbed({ height = 600, onIncidentClick }: Props) {
 
       map.on('zoom', updateMarkerVisibility);
       map.on('moveend', updateMarkerVisibility);
+      updateMarkerVisibilityRef.current = updateMarkerVisibility;
       updateMarkerVisibility();
 
       // cluster click handling moved to `initClusters` in Circles.ts
@@ -328,13 +394,28 @@ export default function LiveMapEmbed({ height = 600, onIncidentClick }: Props) {
 
       map.on('mouseenter', 'incident-clusters', handleClusterMouseEnter);
       map.on('mouseleave', 'incident-clusters', handleClusterMouseLeave);
+
+      const handleMapClick = (event: mapboxgl.MapMouseEvent) => {
+        const clusterFeatures = map.queryRenderedFeatures(event.point, { layers: ['incident-clusters'] });
+        if (clusterFeatures.length > 0) return;
+        onMapClickRef.current?.();
+      };
+
+      map.on('click', handleMapClick);
+      map.once('remove', () => {
+        map.off('click', handleMapClick);
+      });
     });
 
-    setTimeout(() => {
-      map.resize();
+    const resizeTimer = window.setTimeout(() => {
+      if (mapRef.current === map) {
+        map.resize();
+      }
     }, 500);
 
     return () => {
+      window.clearTimeout(resizeTimer);
+
       if (mapRef.current && updateMarkerVisibility) {
         mapRef.current.off('zoom', updateMarkerVisibility);
         mapRef.current.off('moveend', updateMarkerVisibility);
@@ -353,18 +434,20 @@ export default function LiveMapEmbed({ height = 600, onIncidentClick }: Props) {
       if (clustersCleanup) clustersCleanup();
 
       incidentMarkers.forEach((marker) => marker.remove());
+      markerEntriesRef.current = [];
+      updateMarkerVisibilityRef.current = null;
       map.remove();
       mapRef.current = null;
     };
-  }, [onIncidentClick]);
+  }, []);
 
   return (
     <div
       ref={containerRef}
       style={{
         width: '100%',
-        height: `${height}px`,
-        minHeight: '480px',
+        height: typeof height === 'number' ? `${height}px` : height,
+        minHeight: '620px',
         background: '#111',
         position: 'relative',
       }}
