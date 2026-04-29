@@ -14,8 +14,6 @@ const CONF_COLOR: Record<Confidence, string> = {
 
 interface Props {
   height?: number | string;
-  focusIncident?: Incident | null;
-  focusRequest?: number;
   selectedHazardType?: string | null;
   viewRequest?: number;
   onIncidentClick?: (inc: Incident) => void;
@@ -68,6 +66,10 @@ const flyToIncident = (map: MapboxMap, incident: Incident) => {
 const fitToIncidents = (map: MapboxMap, incidents: Incident[]) => {
   if (incidents.length === 0) return;
 
+  if (map.isMoving()) {
+    map.stop();
+  }
+
   if (incidents.length === 1) {
     flyToIncident(map, incidents[0]);
     return;
@@ -89,8 +91,6 @@ const fitToIncidents = (map: MapboxMap, incidents: Incident[]) => {
 
 export default function LiveMapEmbed({
   height = 600,
-  focusIncident,
-  focusRequest = 0,
   selectedHazardType = null,
   viewRequest = 0,
   onIncidentClick,
@@ -126,10 +126,8 @@ export default function LiveMapEmbed({
       const filteredIncidents = selectedHazardType
         ? MOCK_INCIDENTS.filter((incident) => matchesHazardType(incident, selectedHazardType))
         : MOCK_INCIDENTS;
-      const source = map.getSource('incidents') as mapboxgl.GeoJSONSource | undefined;
 
       selectedHazardTypeRef.current = selectedHazardType;
-      source?.setData(makeIncidentSourceData(filteredIncidents));
       updateMarkerVisibilityRef.current?.();
       fitToIncidents(map, filteredIncidents);
     };
@@ -143,7 +141,7 @@ export default function LiveMapEmbed({
     return () => {
       map.off('load', applyHazardFilter);
     };
-  }, [selectedHazardType, viewRequest, focusIncident, focusRequest]);
+  }, [selectedHazardType, viewRequest]);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -185,7 +183,7 @@ export default function LiveMapEmbed({
         cursor: pointer;
         outline: none;
         transform-origin: center bottom;
-        transition: filter 160ms var(--ease), opacity 160ms var(--ease);
+        transition: opacity 200ms ease;
         filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.38));
       `;
 
@@ -353,10 +351,28 @@ export default function LiveMapEmbed({
       updateMarkerVisibility = () => {
         const showPins = map.getZoom() >= CLUSTER_ZOOM;
         const activeHazard = selectedHazardTypeRef.current;
+        const clusterVisibility = activeHazard ? 'none' : 'visible';
+
+        if (map.getLayer('incident-cluster-halo')) {
+          map.setLayoutProperty('incident-cluster-halo', 'visibility', clusterVisibility);
+        }
+
+        if (map.getLayer('incident-clusters')) {
+          map.setLayoutProperty('incident-clusters', 'visibility', clusterVisibility);
+        }
+
+        if (map.getLayer('incident-cluster-count')) {
+          map.setLayoutProperty('incident-cluster-count', 'visibility', clusterVisibility);
+        }
 
         markerEntriesRef.current.forEach(({ marker, incident }) => {
           const matchesHazard = matchesHazardType(incident, activeHazard);
-          marker.getElement().style.display = showPins && matchesHazard ? '' : 'none';
+          const visible = (activeHazard || showPins) && matchesHazard;
+          const element = marker.getElement();
+
+          element.style.opacity = visible ? '1' : '0';
+          element.style.visibility = visible ? 'visible' : 'hidden';
+          element.style.pointerEvents = visible ? 'auto' : 'none';
         });
 
         if (!showPins) {

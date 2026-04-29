@@ -16,15 +16,40 @@ import { MOCK_INCIDENTS } from '../data/incidents';
 import type { Confidence, Incident } from '../data/incidents';
 import LiveMapEmbed from '../components/LiveMapEmbed';
 
-type FilterKey = 'All' | 'Flooding' | 'Fallen Tree' | 'Power Line' | 'Traffic' | 'Other';
+type FilterKey =
+  | 'All'
+  | 'Flooding'
+  | 'Fallen Tree'
+  | 'Road Damage'
+  | 'Traffic Hazard'
+  | 'Downed Power Line'
+  | 'Structural Damage'
+  | 'Fire'
+  | 'Pothole'
+  | 'Other';
 
-const FILTERS: FilterKey[] = ['All', 'Flooding', 'Fallen Tree', 'Power Line', 'Traffic', 'Other'];
+const FILTERS: FilterKey[] = [
+  'All',
+  'Flooding',
+  'Fallen Tree',
+  'Road Damage',
+  'Traffic Hazard',
+  'Downed Power Line',
+  'Structural Damage',
+  'Fire',
+  'Pothole',
+  'Other',
+];
 const INCIDENT_DATE = '04/29/2026';
 const FILTER_HAZARD_TYPE: Record<Exclude<FilterKey, 'All' | 'Other'>, string> = {
   Flooding: 'Flooding',
   'Fallen Tree': 'Fallen Tree',
-  'Power Line': 'Downed Power Line',
-  Traffic: 'Traffic Hazard',
+  'Road Damage': 'Road Damage',
+  'Traffic Hazard': 'Traffic Hazard',
+  'Downed Power Line': 'Downed Power Line',
+  'Structural Damage': 'Structural Damage',
+  Fire: 'Fire',
+  Pothole: 'Pothole',
 };
 
 const statusColor: Record<Confidence, string> = {
@@ -42,8 +67,12 @@ const statusTint: Record<Confidence, string> = {
 const getFilterKey = (incident: Incident): FilterKey => {
   if (incident.type === 'Flooding') return 'Flooding';
   if (incident.type === 'Fallen Tree') return 'Fallen Tree';
-  if (incident.type === 'Downed Power Line') return 'Power Line';
-  if (incident.type === 'Traffic Hazard') return 'Traffic';
+  if (incident.type === 'Road Damage') return 'Road Damage';
+  if (incident.type === 'Traffic Hazard') return 'Traffic Hazard';
+  if (incident.type === 'Downed Power Line') return 'Downed Power Line';
+  if (incident.type === 'Structural Damage') return 'Structural Damage';
+  if (incident.type === 'Fire') return 'Fire';
+  if (incident.type === 'Pothole') return 'Pothole';
   return 'Other';
 };
 
@@ -57,11 +86,20 @@ const getHazardIcon = (incident: Incident): LucideIcon => {
   return AlertCircle;
 };
 
+interface MapUiState {
+  selectedIncident: Incident | null;
+  panelIncident: Incident | null;
+  detailPanelOpen: boolean;
+  selectedHazardType: string | null;
+}
+
 export default function MapPage() {
-  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
-  const [detailPanelOpen, setDetailPanelOpen] = useState(false);
-  const [selectedHazardType, setSelectedHazardType] = useState<string | null>(null);
-  const [focusRequest, setFocusRequest] = useState(0);
+  const [ui, setUi] = useState<MapUiState>({
+    selectedIncident: null,
+    panelIncident: null,
+    detailPanelOpen: false,
+    selectedHazardType: null,
+  });
   const [viewRequest, setViewRequest] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const closeTimerRef = useRef<number | null>(null);
@@ -75,17 +113,21 @@ export default function MapPage() {
     All: 0,
     Flooding: 0,
     'Fallen Tree': 0,
-    'Power Line': 0,
-    Traffic: 0,
+    'Road Damage': 0,
+    'Traffic Hazard': 0,
+    'Downed Power Line': 0,
+    'Structural Damage': 0,
+    Fire: 0,
+    Pothole: 0,
     Other: 0,
   });
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const visibleIncidents = MOCK_INCIDENTS.filter((incident) => {
-    const matchesFilter = !selectedHazardType
-      || (selectedHazardType === 'Other'
+    const matchesFilter = !ui.selectedHazardType
+      || (ui.selectedHazardType === 'Other'
         ? getFilterKey(incident) === 'Other'
-        : incident.type === selectedHazardType);
+        : incident.type === ui.selectedHazardType);
     const matchesSearch = !normalizedSearch
       || incident.type.toLowerCase().includes(normalizedSearch)
       || incident.desc.toLowerCase().includes(normalizedSearch);
@@ -98,30 +140,35 @@ export default function MapPage() {
       closeTimerRef.current = null;
     }
 
-    setSelectedIncident(incident);
-    setSelectedHazardType(incident.type);
-    setDetailPanelOpen(false);
-    setFocusRequest((request) => request + 1);
+    setUi({
+      selectedIncident: incident,
+      panelIncident: incident,
+      detailPanelOpen: true,
+      selectedHazardType: incident.type,
+    });
     setViewRequest((request) => request + 1);
-
-    window.setTimeout(() => {
-      setDetailPanelOpen(true);
-    }, 20);
   }, []);
 
-  const closeDetailPanel = useCallback(() => {
-    setDetailPanelOpen(false);
-    setSelectedHazardType(null);
-    setViewRequest((request) => request + 1);
-
+  const closeIncidentView = useCallback(() => {
     if (closeTimerRef.current) {
       window.clearTimeout(closeTimerRef.current);
     }
 
+    setUi((current) => ({
+      selectedIncident: null,
+      panelIncident: current.panelIncident,
+      detailPanelOpen: false,
+      selectedHazardType: null,
+    }));
+
     closeTimerRef.current = window.setTimeout(() => {
-      setSelectedIncident(null);
+      setUi((current) => ({
+        ...current,
+        panelIncident: null,
+      }));
+      setViewRequest((request) => request + 1);
       closeTimerRef.current = null;
-    }, 250);
+    }, 260);
   }, []);
 
   const selectFilter = (filter: FilterKey) => {
@@ -130,36 +177,43 @@ export default function MapPage() {
       closeTimerRef.current = null;
     }
 
-    setDetailPanelOpen(false);
-    setSelectedIncident(null);
-
     if (filter === 'All') {
-      setSelectedHazardType(null);
-      setViewRequest((request) => request + 1);
+      closeIncidentView();
       return;
     }
+
+    const nextHazardType = filter === 'Other' ? 'Other' : FILTER_HAZARD_TYPE[filter];
 
     if (filter === 'Other') {
-      setSelectedHazardType('Other');
-      setViewRequest((request) => request + 1);
-      return;
+      setUi({
+        selectedIncident: null,
+        panelIncident: null,
+        detailPanelOpen: false,
+        selectedHazardType: nextHazardType,
+      });
+    } else {
+      setUi({
+        selectedIncident: null,
+        panelIncident: null,
+        detailPanelOpen: false,
+        selectedHazardType: nextHazardType,
+      });
     }
 
-    setSelectedHazardType(FILTER_HAZARD_TYPE[filter]);
     setViewRequest((request) => request + 1);
   };
 
   const getActiveFilter = (): FilterKey => {
-    if (!selectedHazardType) return 'All';
-    if (selectedHazardType === 'Other') return 'Other';
+    if (!ui.selectedHazardType) return 'All';
+    if (ui.selectedHazardType === 'Other') return 'Other';
 
-    const incidentForType = MOCK_INCIDENTS.find((incident) => incident.type === selectedHazardType);
+    const incidentForType = MOCK_INCIDENTS.find((incident) => incident.type === ui.selectedHazardType);
     return incidentForType ? getFilterKey(incidentForType) : 'Other';
   };
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') closeDetailPanel();
+      if (event.key === 'Escape') closeIncidentView();
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -170,7 +224,7 @@ export default function MapPage() {
         window.clearTimeout(closeTimerRef.current);
       }
     };
-  }, [closeDetailPanel]);
+  }, [closeIncidentView]);
 
   const IncidentRow = ({ inc, active }: { inc: Incident; active: boolean }) => {
     const Icon = getHazardIcon(inc);
@@ -190,7 +244,7 @@ export default function MapPage() {
           color: 'inherit',
           cursor: 'pointer',
           textAlign: 'left',
-          transition: 'background 160ms var(--ease), border-color 160ms var(--ease), box-shadow 160ms var(--ease), transform 160ms var(--ease)',
+          transition: 'none',
         }}
         onMouseEnter={(event) => {
           if (!active) event.currentTarget.style.background = 'var(--bg-card-hover)';
@@ -275,7 +329,7 @@ export default function MapPage() {
         }}>
           <button
             aria-label="Close incident details"
-            onClick={closeDetailPanel}
+            onClick={closeIncidentView}
             style={{
               width: 34,
               height: 34,
@@ -467,6 +521,7 @@ export default function MapPage() {
             }}>
               {FILTERS.map((filter) => {
                 const active = filter === getActiveFilter();
+                const primaryGroupEnd = filter === 'Traffic Hazard';
 
                 return (
                   <button
@@ -481,6 +536,7 @@ export default function MapPage() {
                       padding: '7px 10px',
                       fontSize: 12,
                       fontWeight: 800,
+                      marginRight: primaryGroupEnd ? 8 : 0,
                     }}
                   >
                     {filter} <span style={{ color: active ? 'var(--accent-cyan)' : 'var(--text-tertiary)', marginLeft: 3 }}>{chipCounts[filter]}</span>
@@ -508,7 +564,7 @@ export default function MapPage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {visibleIncidents.map(inc => (
-                <IncidentRow key={inc.id} inc={inc} active={inc.id === selectedIncident?.id} />
+                <IncidentRow key={inc.id} inc={inc} active={inc.id === ui.selectedIncident?.id} />
               ))}
             </div>
           </section>
@@ -517,17 +573,15 @@ export default function MapPage() {
         <div style={{ background: '#000', position: 'relative', minWidth: 0 }}>
           <LiveMapEmbed
             height="100%"
-            focusIncident={selectedIncident}
-            focusRequest={focusRequest}
-            selectedHazardType={selectedHazardType}
+            selectedHazardType={ui.selectedHazardType}
             viewRequest={viewRequest}
             onIncidentClick={selectIncident}
-            onMapClick={closeDetailPanel}
+            onMapClick={closeIncidentView}
           />
-          {selectedIncident ? (
+          {ui.panelIncident ? (
             <>
-              <MapDismissLayer onDismiss={closeDetailPanel} />
-              <DetailPanel incident={selectedIncident} open={detailPanelOpen} />
+              <MapDismissLayer onDismiss={closeIncidentView} />
+              <DetailPanel incident={ui.panelIncident} open={ui.detailPanelOpen} />
             </>
           ) : null}
         </div>
