@@ -663,6 +663,7 @@ export default function MapPage() {
             incidents={incidents}
             selectedHazardType={ui.selectedHazardType}
             viewRequest={viewRequest}
+            focusIncidentId={ui.selectedIncident?.id ?? null}
             onIncidentClick={selectIncident}
             onMapClick={closeIncidentView}
           />

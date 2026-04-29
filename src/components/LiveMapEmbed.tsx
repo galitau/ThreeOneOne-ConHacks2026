@@ -17,6 +17,7 @@ interface Props {
   incidents?: Incident[];
   selectedHazardType?: string | null;
   viewRequest?: number;
+  focusIncidentId?: number | null;
   onIncidentClick?: (inc: Incident) => void;
   onMapClick?: () => void;
 }
@@ -95,6 +96,7 @@ export default function LiveMapEmbed({
   incidents = MOCK_INCIDENTS,
   selectedHazardType = null,
   viewRequest = 0,
+  focusIncidentId = null,
   onIncidentClick,
   onMapClick,
 }: Props) {
@@ -145,6 +147,21 @@ export default function LiveMapEmbed({
       map.off('load', applyHazardFilter);
     };
   }, [incidents, viewRequest]);
+
+  // Focus a specific incident when requested (e.g., clicked in the list)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || focusIncidentId == null) return;
+
+    const target = incidents.find((i) => i.id === focusIncidentId);
+    if (!target) return;
+
+    try {
+      flyToIncident(map, target);
+    } catch (e) {
+      // ignore
+    }
+  }, [focusIncidentId, incidents]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -341,6 +358,14 @@ export default function LiveMapEmbed({
             }
             currentDetail.remove();
             currentDetail = null;
+          }
+
+          // Fly to the incident location so user sees the marker up-close
+          try {
+            flyToIncident(map, incident);
+          } catch (e) {
+            // ignore if map is not ready for some reason
+            // console.warn('flyTo failed', e);
           }
 
         });
