@@ -10,7 +10,7 @@ import { initClusters } from './Circles';
 const CONF_COLOR: Record<Confidence, string> = {
   high: '#ff4444',
   medium: '#f5a623',
-  low: '#6b7280',
+  low: '#2563eb',
 };
 
 interface Props {
@@ -213,6 +213,7 @@ export default function LiveMapEmbed({ height = 600, onIncidentClick }: Props) {
 
         // show tooltip on hover
         markerElement.addEventListener('mouseenter', () => {
+          if (currentDetail) return;
           if (tooltipMap.has(markerElement)) return;
           const tip = makeDescription(incident);
           markerElement.appendChild(tip);

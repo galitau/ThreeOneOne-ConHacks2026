@@ -43,7 +43,7 @@ export function initClusters(opts: {
     source: sourceId,
     filter: ['has', 'point_count'],
     paint: {
-      'circle-color': ['step', ['get', 'emergencySum'], '#16a34a', 4, '#f59e0b', 7, '#ef4444', 10, '#b91c1c'],
+      'circle-color': ['step', ['get', 'point_count'], '#2563eb', 4, '#f59e0b', 8, '#ef4444'],
       'circle-radius': ['step', ['get', 'point_count'], 19, 3, 25, 7, 31],
       'circle-opacity': 0.96,
       'circle-stroke-width': 2.5,
