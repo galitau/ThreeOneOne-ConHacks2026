@@ -14,6 +14,7 @@ const CONF_COLOR: Record<Confidence, string> = {
 
 interface Props {
   height?: number | string;
+  incidents?: Incident[];
   selectedHazardType?: string | null;
   viewRequest?: number;
   reportLocation?: { lat: number; lon: number };
@@ -93,6 +94,7 @@ const fitToIncidents = (map: MapboxMap, incidents: Incident[]) => {
 
 export default function LiveMapEmbed({
   height = 600,
+  incidents = MOCK_INCIDENTS,
   selectedHazardType = null,
   viewRequest = 0,
   reportLocation,
@@ -153,8 +155,8 @@ export default function LiveMapEmbed({
 
     const applyHazardFilter = () => {
       const filteredIncidents = selectedHazardType
-        ? MOCK_INCIDENTS.filter((incident) => matchesHazardType(incident, selectedHazardType))
-        : MOCK_INCIDENTS;
+        ? incidents.filter((incident) => matchesHazardType(incident, selectedHazardType))
+        : incidents;
 
       selectedHazardTypeRef.current = selectedHazardType;
       updateMarkerVisibilityRef.current?.();
@@ -170,10 +172,15 @@ export default function LiveMapEmbed({
     return () => {
       map.off('load', applyHazardFilter);
     };
-  }, [selectedHazardType, viewRequest]);
+  }, [incidents, selectedHazardType, viewRequest]);
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerRef.current) return;
+
+    if (mapRef.current) {
+      mapRef.current.remove();
+      mapRef.current = null;
+    }
 
     const token = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -192,7 +199,7 @@ export default function LiveMapEmbed({
     let handleClusterMouseLeave: (() => void) | null = null;
     let clustersCleanup: (() => void) | null = null;
 
-    const incidentSourceData = makeIncidentSourceData(MOCK_INCIDENTS);
+    const incidentSourceData = makeIncidentSourceData(incidents);
 
     const createIncidentPin = (confidence: Confidence) => {
       const color = CONF_COLOR[confidence];
@@ -378,7 +385,7 @@ export default function LiveMapEmbed({
       }).cleanup;
 
       // 📍 Incidents
-      MOCK_INCIDENTS.forEach((incident) => {
+      incidents.forEach((incident) => {
         const markerElement = createIncidentPin(incident.conf);
 
         // show tooltip on hover
@@ -538,7 +545,7 @@ export default function LiveMapEmbed({
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [incidents]);
 
   return (
     <div

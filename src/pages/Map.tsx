@@ -16,6 +16,12 @@ import { MOCK_INCIDENTS } from '../data/incidents';
 import type { Confidence, Incident } from '../data/incidents';
 import LiveMapEmbed from '../components/LiveMapEmbed';
 
+type IncidentStatus = 'active' | 'in progress' | 'completed';
+
+type TrackedIncident = Incident & {
+  status: IncidentStatus;
+};
+
 type FilterKey =
   | 'All'
   | 'Flooding'
@@ -86,14 +92,29 @@ const getHazardIcon = (incident: Incident): LucideIcon => {
   return AlertCircle;
 };
 
+const normalizeTrackedIncident = (incident: Incident | TrackedIncident): TrackedIncident => (
+  'status' in incident
+    ? incident
+    : {
+        ...incident,
+        status: 'active',
+      }
+);
+
 interface MapUiState {
-  selectedIncident: Incident | null;
-  panelIncident: Incident | null;
+  selectedIncident: TrackedIncident | null;
+  panelIncident: TrackedIncident | null;
   detailPanelOpen: boolean;
   selectedHazardType: string | null;
 }
 
 export default function MapPage() {
+  const [incidents, setIncidents] = useState<TrackedIncident[]>(() => (
+    MOCK_INCIDENTS.map((incident) => ({
+      ...incident,
+      status: 'active' as IncidentStatus,
+    }))
+  ));
   const [ui, setUi] = useState<MapUiState>({
     selectedIncident: null,
     panelIncident: null,
@@ -106,8 +127,8 @@ export default function MapPage() {
 
   const chipCounts = FILTERS.reduce<Record<FilterKey, number>>((acc, filter) => {
     acc[filter] = filter === 'All'
-      ? MOCK_INCIDENTS.length
-      : MOCK_INCIDENTS.filter((incident) => getFilterKey(incident) === filter).length;
+      ? incidents.length
+      : incidents.filter((incident) => getFilterKey(incident) === filter).length;
     return acc;
   }, {
     All: 0,
@@ -123,7 +144,7 @@ export default function MapPage() {
   });
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
-  const visibleIncidents = MOCK_INCIDENTS.filter((incident) => {
+  const visibleIncidents = incidents.filter((incident) => {
     const matchesFilter = !ui.selectedHazardType
       || (ui.selectedHazardType === 'Other'
         ? getFilterKey(incident) === 'Other'
@@ -140,13 +161,46 @@ export default function MapPage() {
       closeTimerRef.current = null;
     }
 
+    const trackedIncident = normalizeTrackedIncident(incident);
+
     setUi({
-      selectedIncident: incident,
-      panelIncident: incident,
+      selectedIncident: trackedIncident,
+      panelIncident: trackedIncident,
       detailPanelOpen: true,
-      selectedHazardType: incident.type,
+      selectedHazardType: trackedIncident.type,
     });
     setViewRequest((request) => request + 1);
+  }, []);
+
+  const updateIncidentStatus = useCallback((incidentId: number, status: IncidentStatus) => {
+    if (status === 'completed') {
+      const confirmed = window.confirm('Delete this location? This cannot be undone.');
+      if (!confirmed) return;
+
+      setIncidents((current) => current.filter((incident) => incident.id !== incidentId));
+      setUi((current) => ({
+        ...current,
+        selectedIncident: current.selectedIncident?.id === incidentId ? null : current.selectedIncident,
+        panelIncident: current.panelIncident?.id === incidentId ? null : current.panelIncident,
+        detailPanelOpen: current.panelIncident?.id === incidentId ? false : current.detailPanelOpen,
+      }));
+      setViewRequest((request) => request + 1);
+      return;
+    }
+
+    setIncidents((current) => current.map((incident) => (
+      incident.id === incidentId ? { ...incident, status } : incident
+    )));
+
+    setUi((current) => ({
+      ...current,
+      selectedIncident: current.selectedIncident?.id === incidentId
+        ? { ...current.selectedIncident, status }
+        : current.selectedIncident,
+      panelIncident: current.panelIncident?.id === incidentId
+        ? { ...current.panelIncident, status }
+        : current.panelIncident,
+    }));
   }, []);
 
   const closeIncidentView = useCallback(() => {
@@ -226,7 +280,7 @@ export default function MapPage() {
     };
   }, [closeIncidentView]);
 
-  const IncidentRow = ({ inc, active }: { inc: Incident; active: boolean }) => {
+  const IncidentRow = ({ inc, active }: { inc: TrackedIncident; active: boolean }) => {
     const Icon = getHazardIcon(inc);
     const color = statusColor[inc.conf];
 
@@ -236,11 +290,11 @@ export default function MapPage() {
         style={{
           width: '100%',
           padding: '13px 13px 13px 12px',
-          background: active ? 'rgba(6, 182, 212, 0.08)' : 'var(--bg-card)',
+          background: active ? 'rgba(255, 68, 68, 0.06)' : 'var(--bg-card)',
           border: active ? '1px solid var(--accent-cyan)' : '1px solid var(--border)',
           borderLeft: `3px solid ${color}`,
           borderRadius: 10,
-          boxShadow: active ? '0 0 0 1px rgba(6, 182, 212, 0.12), 0 14px 34px rgba(6, 182, 212, 0.12)' : 'none',
+          boxShadow: active ? '0 0 0 1px rgba(255, 68, 68, 0.10), 0 14px 34px rgba(255, 68, 68, 0.06)' : 'none',
           color: 'inherit',
           cursor: 'pointer',
           textAlign: 'left',
@@ -299,7 +353,7 @@ export default function MapPage() {
     </div>
   );
 
-  const DetailPanel = ({ incident, open }: { incident: Incident; open: boolean }) => {
+  const DetailPanel = ({ incident, open }: { incident: TrackedIncident; open: boolean }) => {
     const color = statusColor[incident.conf];
 
     return (
@@ -335,7 +389,7 @@ export default function MapPage() {
               height: 34,
               border: '1px solid rgba(255, 255, 255, 0.14)',
               borderRadius: 9,
-              background: 'rgba(10, 14, 26, 0.26)',
+              background: 'rgba(15, 23, 42, 0.04)',
               color: 'var(--text-primary)',
               display: 'grid',
               placeItems: 'center',
@@ -359,7 +413,7 @@ export default function MapPage() {
             width: 34,
             height: 34,
             borderRadius: 9,
-            background: 'rgba(10, 14, 26, 0.26)',
+            background: 'rgba(15, 23, 42, 0.04)',
             color,
             display: 'grid',
             placeItems: 'center',
@@ -431,7 +485,40 @@ export default function MapPage() {
           </FieldBlock>
 
           <FieldBlock label="Status">
-            <span style={{ color, fontWeight: 800 }}>Active</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+              {([
+                { value: 'active' as const, label: 'Active', accent: '#ef4444' },
+                { value: 'in progress' as const, label: 'In Progress', accent: '#f59e0b' },
+                { value: 'completed' as const, label: 'Completed', accent: '#16a34a' },
+              ]).map((option) => {
+                const isSelected = incident.status === option.value;
+
+                return (
+                  <button
+                    key={option.value}
+                    onClick={() => updateIncidentStatus(incident.id, option.value)}
+                    style={{
+                      border: `1px solid ${isSelected ? option.accent : 'var(--border)'}`,
+                      background: isSelected ? `${option.accent}12` : 'var(--bg-card)',
+                      color: 'var(--text-primary)',
+                      borderRadius: 10,
+                      padding: '10px 8px',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ marginTop: 8, color, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+              Current: {incident.status}
+            </div>
+            <div style={{ marginTop: 6, color: 'var(--text-tertiary)', fontSize: 12, lineHeight: 1.4 }}>
+              Choosing Completed will remove this location after confirmation.
+            </div>
           </FieldBlock>
         </div>
       </div>
@@ -457,14 +544,14 @@ export default function MapPage() {
   return (
     <div
       style={{
-        '--bg-primary': '#0A0E1A',
-        '--bg-card': '#121826',
-        '--bg-card-hover': '#1A2233',
-        '--border': '#1F2937',
-        '--text-primary': '#F3F4F6',
-        '--text-secondary': '#9CA3AF',
-        '--text-tertiary': '#6B7280',
-        '--accent-cyan': '#06B6D4',
+        '--bg-primary': '#F7F9FB',
+        '--bg-card': '#FFFFFF',
+        '--bg-card-hover': '#F3F6F9',
+        '--border': '#E6E9EE',
+        '--text-primary': '#0B1020',
+        '--text-secondary': '#6B7280',
+        '--text-tertiary': '#9CA3AF',
+        '--accent-cyan': 'var(--accent)',
         '--status-high': '#EF4444',
         '--status-medium': '#F59E0B',
         '--status-low': '#6B7280',
@@ -529,10 +616,10 @@ export default function MapPage() {
                     onClick={() => selectFilter(filter)}
                     style={{
                       flex: '0 0 auto',
-                      border: `1px solid ${active ? 'var(--accent-cyan)' : 'var(--border)'}`,
-                      borderRadius: 999,
-                      background: active ? 'rgba(6, 182, 212, 0.08)' : 'transparent',
-                      color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                                  border: `1px solid ${active ? 'var(--accent-cyan)' : 'var(--border)'}`,
+                                  borderRadius: 999,
+                                  background: active ? 'rgba(255, 68, 68, 0.06)' : 'transparent',
+                                  color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
                       padding: '7px 10px',
                       fontSize: 12,
                       fontWeight: 800,
@@ -553,7 +640,7 @@ export default function MapPage() {
                 bottom: 8,
                 width: 24,
                 pointerEvents: 'none',
-                background: 'linear-gradient(90deg, rgba(10, 14, 26, 0), var(--bg-primary))',
+                background: 'linear-gradient(90deg, rgba(255, 255, 255, 0), var(--bg-primary))',
               }}
             />
           </div>
@@ -570,9 +657,10 @@ export default function MapPage() {
           </section>
         </aside>
 
-        <div style={{ background: '#000', position: 'relative', minWidth: 0 }}>
+        <div style={{ background: 'var(--bg-primary)', position: 'relative', minWidth: 0 }}>
           <LiveMapEmbed
             height="100%"
+            incidents={incidents}
             selectedHazardType={ui.selectedHazardType}
             viewRequest={viewRequest}
             onIncidentClick={selectIncident}
