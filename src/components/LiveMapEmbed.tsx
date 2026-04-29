@@ -17,8 +17,6 @@ interface Props {
   incidents?: Incident[];
   selectedHazardType?: string | null;
   viewRequest?: number;
-  reportLocation?: { lat: number; lon: number };
-  onReportLocationChange?: (location: { lat: number; lon: number }) => void;
   onIncidentClick?: (inc: Incident) => void;
   onMapClick?: () => void;
 }
@@ -97,16 +95,11 @@ export default function LiveMapEmbed({
   incidents = MOCK_INCIDENTS,
   selectedHazardType = null,
   viewRequest = 0,
-  reportLocation,
-  onReportLocationChange,
   onIncidentClick,
   onMapClick,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapboxMap | null>(null);
-  const reportMarkerRef = useRef<mapboxgl.Marker | null>(null);
-  const reportLocationRef = useRef(reportLocation);
-  const onReportLocationChangeRef = useRef(onReportLocationChange);
   const onIncidentClickRef = useRef(onIncidentClick);
   const onMapClickRef = useRef(onMapClick);
   const selectedHazardTypeRef = useRef<string | null>(selectedHazardType);
@@ -120,33 +113,12 @@ export default function LiveMapEmbed({
   }, [onIncidentClick]);
 
   useEffect(() => {
-    onReportLocationChangeRef.current = onReportLocationChange;
-  }, [onReportLocationChange]);
-
-  useEffect(() => {
-    reportLocationRef.current = reportLocation;
-
-    if (!reportLocation || !reportMarkerRef.current) return;
-
-    reportMarkerRef.current.setLngLat([reportLocation.lon, reportLocation.lat]);
-
-    const map = mapRef.current;
-    if (map) {
-      map.easeTo({
-        center: [reportLocation.lon, reportLocation.lat],
-        zoom: Math.max(map.getZoom(), 15),
-        duration: 700,
-        essential: true,
-      });
-    }
-  }, [reportLocation]);
-
-  useEffect(() => {
     onMapClickRef.current = onMapClick;
   }, [onMapClick]);
 
   useEffect(() => {
     selectedHazardTypeRef.current = selectedHazardType;
+    updateMarkerVisibilityRef.current?.();
   }, [selectedHazardType]);
 
   useEffect(() => {
@@ -154,11 +126,11 @@ export default function LiveMapEmbed({
     if (!map || viewRequest === 0) return;
 
     const applyHazardFilter = () => {
-      const filteredIncidents = selectedHazardType
-        ? incidents.filter((incident) => matchesHazardType(incident, selectedHazardType))
+      const activeHazard = selectedHazardTypeRef.current;
+      const filteredIncidents = activeHazard
+        ? incidents.filter((incident) => matchesHazardType(incident, activeHazard))
         : incidents;
 
-      selectedHazardTypeRef.current = selectedHazardType;
       updateMarkerVisibilityRef.current?.();
       fitToIncidents(map, filteredIncidents);
     };
@@ -172,7 +144,7 @@ export default function LiveMapEmbed({
     return () => {
       map.off('load', applyHazardFilter);
     };
-  }, [incidents, selectedHazardType, viewRequest]);
+  }, [incidents, viewRequest]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -259,39 +231,6 @@ export default function LiveMapEmbed({
       return marker;
     };
 
-    const createReportPin = () => {
-      const marker = document.createElement('button');
-      marker.type = 'button';
-      marker.setAttribute('aria-label', 'Selected report location');
-      marker.style.cssText = `
-        width: 34px;
-        height: 46px;
-        padding: 0;
-        border: 0;
-        background: transparent;
-        cursor: grab;
-        outline: none;
-        filter: drop-shadow(0 12px 16px rgba(0, 0, 0, 0.36));
-      `;
-
-      marker.innerHTML = `
-        <svg viewBox="0 0 34 46" width="34" height="46" aria-hidden="true" focusable="false" style="display:block; overflow: visible;">
-          <path d="M17 2C9.82 2 4 7.82 4 15c0 9.54 13 29 13 29s13-19.46 13-29C30 7.82 24.18 2 17 2Z" fill="#EF4444" stroke="white" stroke-width="2" />
-          <circle cx="17" cy="15" r="5.3" fill="white" />
-        </svg>
-      `;
-
-      marker.addEventListener('mousedown', () => {
-        marker.style.cursor = 'grabbing';
-      });
-
-      marker.addEventListener('mouseup', () => {
-        marker.style.cursor = 'grab';
-      });
-
-      return marker;
-    };
-
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: 'mapbox://styles/mapbox/streets-v12',
@@ -305,25 +244,6 @@ export default function LiveMapEmbed({
     mapRef.current = map;
 
     map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-
-    if (reportLocationRef.current) {
-      const reportPin = createReportPin();
-      const marker = new mapboxgl.Marker({
-        element: reportPin,
-        anchor: 'bottom',
-        draggable: true,
-      })
-        .setLngLat([reportLocationRef.current.lon, reportLocationRef.current.lat])
-        .addTo(map);
-
-      marker.on('dragend', () => {
-        const position = marker.getLngLat();
-        reportPin.style.cursor = 'grab';
-        onReportLocationChangeRef.current?.({ lat: position.lat, lon: position.lng });
-      });
-
-      reportMarkerRef.current = marker;
-    }
 
     map.on('error', (e) => {
       console.error('MAPBOX ERROR:', e);
@@ -537,8 +457,6 @@ export default function LiveMapEmbed({
 
       if (clustersCleanup) clustersCleanup();
 
-      reportMarkerRef.current?.remove();
-      reportMarkerRef.current = null;
       incidentMarkers.forEach((marker) => marker.remove());
       markerEntriesRef.current = [];
       updateMarkerVisibilityRef.current = null;

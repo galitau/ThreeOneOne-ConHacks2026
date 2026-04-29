@@ -208,21 +208,13 @@ export default function MapPage() {
       window.clearTimeout(closeTimerRef.current);
     }
 
+    // Start close animation; keep `panelIncident` mounted until transition end.
     setUi((current) => ({
       selectedIncident: null,
       panelIncident: current.panelIncident,
       detailPanelOpen: false,
       selectedHazardType: null,
     }));
-
-    closeTimerRef.current = window.setTimeout(() => {
-      setUi((current) => ({
-        ...current,
-        panelIncident: null,
-      }));
-      setViewRequest((request) => request + 1);
-      closeTimerRef.current = null;
-    }, 260);
   }, []);
 
   const selectFilter = (filter: FilterKey) => {
@@ -353,7 +345,7 @@ export default function MapPage() {
     </div>
   );
 
-  const DetailPanel = ({ incident, open }: { incident: TrackedIncident; open: boolean }) => {
+  const DetailPanel = ({ incident, open, onAfterClose }: { incident: TrackedIncident; open: boolean; onAfterClose?: () => void }) => {
     const color = statusColor[incident.conf];
 
     return (
@@ -371,6 +363,12 @@ export default function MapPage() {
         zIndex: 5,
         display: 'flex',
         flexDirection: 'column',
+      }}
+      onTransitionEnd={(e) => {
+        // When the panel has finished sliding out, notify parent to unmount it.
+        if (e.propertyName === 'transform' && !open) {
+          onAfterClose?.();
+        }
       }}>
         <div style={{
           height: 80,
@@ -562,6 +560,8 @@ export default function MapPage() {
     >
       <div style={{ display: 'grid', gridTemplateColumns: '340px minmax(0, 1fr)', height: 'calc(100vh - 56px)', minHeight: 620 }}>
         <aside style={{
+          position: 'relative',
+          zIndex: 3,
           background: 'var(--bg-primary)',
           borderRight: '1px solid var(--border)',
           padding: 18,
@@ -657,7 +657,7 @@ export default function MapPage() {
           </section>
         </aside>
 
-        <div style={{ background: 'var(--bg-primary)', position: 'relative', minWidth: 0 }}>
+        <div style={{ background: 'var(--bg-primary)', position: 'relative', minWidth: 0, zIndex: 0 }}>
           <LiveMapEmbed
             height="100%"
             incidents={incidents}
@@ -668,8 +668,15 @@ export default function MapPage() {
           />
           {ui.panelIncident ? (
             <>
-              <MapDismissLayer onDismiss={closeIncidentView} />
-              <DetailPanel incident={ui.panelIncident} open={ui.detailPanelOpen} />
+              {ui.detailPanelOpen ? <MapDismissLayer onDismiss={closeIncidentView} /> : null}
+              <DetailPanel
+                incident={ui.panelIncident}
+                open={ui.detailPanelOpen}
+                onAfterClose={() => {
+                  setUi((current) => ({ ...current, panelIncident: null }));
+                  setViewRequest((request) => request + 1);
+                }}
+              />
             </>
           ) : null}
         </div>
