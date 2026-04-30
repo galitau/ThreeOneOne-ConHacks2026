@@ -29,11 +29,14 @@ const dedupeIncidents = (incidents: Incident[]) => {
   return deduped;
 };
 
-const loadVerifiedIncidents = async (): Promise<Incident[]> => {
+export type IncidentsLoadStatus = 'loading' | 'success' | 'error-api-unavailable' | 'error-parse';
+
+const loadVerifiedIncidents = async (): Promise<{ incidents: Incident[]; status: IncidentsLoadStatus }> => {
   try {
     const response = await fetch('/api/verified-hazards');
     if (!response.ok) {
-      throw new Error(`API returned ${response.status}`);
+      console.error('[Home] API returned non-200 status:', response.status);
+      return { incidents: MOCK_INCIDENTS, status: 'error-api-unavailable' };
     }
 
     const payload = (await response.json()) as IncidentApiResponse;
@@ -41,10 +44,10 @@ const loadVerifiedIncidents = async (): Promise<Incident[]> => {
     const deduped = dedupeIncidents(incidents);
 
     console.log(`[Home] Loaded ${deduped.length} verified incidents from database`);
-    return deduped;
+    return { incidents: deduped, status: 'success' };
   } catch (error) {
-    console.error('[Home] Falling back to mock incidents because verified hazards could not be loaded:', error);
-    return MOCK_INCIDENTS;
+    console.error('[Home] Failed to fetch verified hazards:', error);
+    return { incidents: MOCK_INCIDENTS, status: 'error-api-unavailable' };
   }
 };
 
@@ -146,6 +149,7 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
   const [visible, setVisible] = useState(false);
   const [incidents, setIncidents] = useState<Incident[]>(MOCK_INCIDENTS);
   const [isLoadingIncidents, setIsLoadingIncidents] = useState(true);
+  const [loadStatus, setLoadStatus] = useState<IncidentsLoadStatus>('loading');
   const heroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -158,10 +162,11 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
 
     const hydrateIncidents = async () => {
       setIsLoadingIncidents(true);
-      const verifiedIncidents = await loadVerifiedIncidents();
+      const result = await loadVerifiedIncidents();
 
       if (!cancelled) {
-        setIncidents(verifiedIncidents);
+        setIncidents(result.incidents);
+        setLoadStatus(result.status);
         setIsLoadingIncidents(false);
       }
     };
@@ -185,6 +190,24 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
 
   return (
     <div style={{ paddingTop: 56, background: 'var(--bg1)' }}>
+
+      {/* ── API UNAVAILABLE WARNING ── */}
+      {loadStatus === 'error-api-unavailable' && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.1)',
+          borderBottom: '2px solid rgb(239, 68, 68)',
+          padding: '16px 24px',
+          textAlign: 'center',
+          color: 'rgb(220, 38, 38)',
+          fontSize: 14,
+          fontWeight: 600,
+        }}>
+          ⚠️ Verified hazards API is unavailable. Showing mock data only. <br />
+          <span style={{ fontSize: 12, fontWeight: 400, opacity: 0.8 }}>
+            Ensure the report API is running on port 8001 (run <code>npm run dev</code> from the workspace root).
+          </span>
+        </div>
+      )}
 
       {/* ── HERO ── */}
       <section ref={heroRef} style={{

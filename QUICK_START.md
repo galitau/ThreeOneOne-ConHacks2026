@@ -1,21 +1,34 @@
 # Quick Reference: Running the Verified Hazards Implementation
 
-## Starting the Backend API
+## ⚡ Quick Start (Recommended)
+
+**Start BOTH the frontend and backend together in one command:**
 
 ```bash
-# In the project root directory, start the report_api.py server
-python report_api.py
-
-# You should see:
-# Report API listening on http://127.0.0.1:8000
+npm run dev
 ```
 
-## Starting the Frontend
+This single command starts:
+- **Frontend dev server** at `http://localhost:5173`
+- **Report API backend** at `http://127.0.0.1:8001`
 
+The frontend proxies requests to `/api/verified-hazards` → port 8001.
+
+> ⚠️ **IMPORTANT:** If you only run `vite` or `npm run dev:client`, the Report API will NOT start, and the app will show only mock data with a red warning banner.
+
+## Alternative: Starting Services Separately
+
+If you prefer to run them in separate terminals:
+
+**Terminal 1 — Backend API:**
 ```bash
-# In another terminal, start the dev server
-npm run dev
+.venv/Scripts/python.exe report_api.py
+# You should see: Report API listening on http://127.0.0.1:8001
+```
 
+**Terminal 2 — Frontend:**
+```bash
+npm run dev:client
 # The app will be available at http://localhost:5173
 ```
 
@@ -23,29 +36,29 @@ npm run dev
 
 ```bash
 # Test the verified hazards endpoint
-curl http://127.0.0.1:8000/process-incoming 
-uvicorn app.main:app --reload --port 8000  
+curl http://127.0.0.1:8001/api/verified-hazards
 
 # Expected response:
 {
   "status": "success",
-  "count": 7,
+  "count": 4,
+  "summary": {"totalRows": 7, "uniqueSignalIds": 4, "table": "THREE_ONE_ONE.RAW.VERIFIED_HAZARDS"},
   "incidents": [
     {
-      "id": 1,
-      "type": "Flooding",
-      "lat": 43.6538,
-      "lng": -79.3834,
+      "signalId": "5e5ffa02-fb54-49cc-8716-8a376133598b",
+      "type": "Fallen Tree",
+      "lat": 43.679,
+      "lng": -79.373,
       "conf": "high",
-      "score": 87,
-      "reports": 14,
-      "hasImage": true,
-      "sources": ["X", "Bluesky", "User"],
-      "time": "4 min ago",
-      "desc": "Multiple residents reporting basement flooding on Erb St...",
-      "icon": "🌊"
+      "score": 90,
+      "reports": 1,
+      "hasImage": false,
+      "sources": ["user_report"],
+      "time": "7 hours ago",
+      "desc": "A large tree has fallen across a paved road...",
+      "icon": "🌳"
     },
-    ...more incidents
+    ...more verified incidents from Snowflake database
   ]
 }
 ```

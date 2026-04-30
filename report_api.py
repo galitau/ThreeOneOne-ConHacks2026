@@ -360,6 +360,8 @@ def fetch_verified_hazards(cursor: snowflake.connector.cursor.SnowflakeCursor) -
 
     table_name = resolve_verified_hazards_table(cursor)
 
+    incoming_signals_table = "THREE_ONE_ONE.RAW.INCOMING_SIGNALS"
+
     cursor.execute(
         """
         SELECT
@@ -379,7 +381,7 @@ def fetch_verified_hazards(cursor: snowflake.connector.cursor.SnowflakeCursor) -
             signals.IMAGE_MIME_TYPE,
             signals.IMAGE_BASE64
         FROM {table_name} AS verified
-        LEFT JOIN INCOMING_SIGNALS AS signals
+            LEFT JOIN {incoming_signals_table} AS signals
                 ON signals.ID::STRING = verified.SIGNAL_ID
         WHERE CAST(verified.IS_HAZARD AS BOOLEAN) = TRUE
         QUALIFY ROW_NUMBER() OVER (
@@ -387,7 +389,7 @@ def fetch_verified_hazards(cursor: snowflake.connector.cursor.SnowflakeCursor) -
             ORDER BY verified.CONFIDENCE_SCORE DESC, verified.INGESTED_AT DESC, verified.LAT DESC, verified.LON DESC
         ) = 1
         ORDER BY verified.SIGNAL_ID ASC, verified.INGESTED_AT DESC, verified.LAT DESC, verified.LON DESC
-        """.format(table_name=table_name)
+        """.format(table_name=table_name, incoming_signals_table=incoming_signals_table)
     )
 
     incidents_by_signal: dict[str, tuple[float, Any, dict[str, Any]]] = {}

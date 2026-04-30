@@ -145,12 +145,13 @@ const validateAndDeduplicateIncidents = (incidents: Incident[]): Incident[] => {
   return Array.from(seenKeys.values());
 };
 
-const fetchVerifiedHazards = async (): Promise<Incident[]> => {
+const fetchVerifiedHazards = async (): Promise<{ incidents: Incident[]; status: string }> => {
   try {
     const response = await fetch('/api/verified-hazards');
 
     if (!response.ok) {
-      throw new Error(`API returned status ${response.status}`);
+      console.error('[Map] API returned status:', response.status);
+      return { incidents: MOCK_INCIDENTS, status: 'error-api-unavailable' };
     }
 
     const data = await response.json();
@@ -158,16 +159,17 @@ const fetchVerifiedHazards = async (): Promise<Incident[]> => {
     const deduplicated = validateAndDeduplicateIncidents(incidents);
 
     console.log(`[Map] Loaded ${deduplicated.length} verified incidents from database`);
-    return deduplicated;
+    return { incidents: deduplicated, status: 'success' };
   } catch (error) {
-    console.error('[Map] Failed to fetch verified hazards from API, falling back to mock data:', error);
-    return MOCK_INCIDENTS;
+    console.error('[Map] Failed to fetch verified hazards from API:', error);
+    return { incidents: MOCK_INCIDENTS, status: 'error-api-unavailable' };
   }
 };
 
 export default function MapPage() {
   const [incidents, setIncidents] = useState<TrackedIncident[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadStatus, setLoadStatus] = useState<string>('loading');
   const [ui, setUi] = useState<MapUiState>({
     selectedIncident: null,
     panelIncident: null,
@@ -183,15 +185,16 @@ export default function MapPage() {
 
     const loadHazards = async () => {
       setIsLoading(true);
-      const fetchedIncidents = await fetchVerifiedHazards();
+      const result = await fetchVerifiedHazards();
 
       if (isMounted) {
-        const trackedIncidents = fetchedIncidents.map((incident) => ({
+        const trackedIncidents = result.incidents.map((incident) => ({
           ...incident,
           status: 'active' as IncidentStatus,
         }));
 
         setIncidents(trackedIncidents);
+        setLoadStatus(result.status);
         setIsLoading(false);
       }
     };
@@ -722,6 +725,23 @@ export default function MapPage() {
         background: 'var(--bg-primary)',
       } as React.CSSProperties}
     >
+      {loadStatus === 'error-api-unavailable' && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.1)',
+          borderBottom: '2px solid rgb(239, 68, 68)',
+          padding: '16px 24px',
+          textAlign: 'center',
+          color: 'rgb(220, 38, 38)',
+          fontSize: 14,
+          fontWeight: 600,
+        }}>
+          ⚠️ Verified hazards API is unavailable. Showing mock data only. <br />
+          <span style={{ fontSize: 12, fontWeight: 400, opacity: 0.8 }}>
+            Ensure the report API is running on port 8001 (run <code>npm run dev</code> from the workspace root).
+          </span>
+        </div>
+      )}
+
       <div style={{
         display: 'grid',
         gridTemplateColumns: '340px minmax(0, 1fr)',
