@@ -20,9 +20,9 @@ type IncidentStatus = 'active' | 'in progress' | 'completed';
 
 type TrackedIncident = Incident & {
   status: IncidentStatus;
-  photoUrl?: string;
-  imageUrl?: string;
-  images?: string[];
+  photoUrl?: string | null;
+  imageUrl?: string | null;
+  images?: string[] | null;
 };
 
 type FilterKey =
