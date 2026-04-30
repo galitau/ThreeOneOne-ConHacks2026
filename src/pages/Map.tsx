@@ -108,13 +108,77 @@ interface MapUiState {
   selectedHazardType: string | null;
 }
 
+/**
+ * Validates that all incidents have unique IDs.
+ * If duplicates are found, logs them and removes duplicates by keeping first occurrence.
+ * @param incidents Array of incidents to validate
+ * @returns Array of incidents with duplicates removed (if any existed)
+ */
+const validateAndDeduplicateIncidents = (incidents: Incident[]): Incident[] => {
+  // Create a Map to track seen IDs and store the first occurrence
+  const seenKeys = new Map<string, Incident>();
+  const duplicateKeys: string[] = [];
+
+  for (const incident of incidents) {
+    const signalId = typeof (incident as Incident & { signalId?: number }).signalId === 'number'
+      ? (incident as Incident & { signalId?: number }).signalId
+      : null;
+    const dedupeKey = signalId == null ? `id:${incident.id}` : `signal:${signalId}`;
+
+    if (seenKeys.has(dedupeKey)) {
+      // We've seen this signal before - it's a duplicate
+      duplicateKeys.push(dedupeKey);
+    } else {
+      // First occurrence of this signal, store it
+      seenKeys.set(dedupeKey, incident);
+    }
+  }
+
+  // If we found duplicates, warn the developer
+  if (duplicateKeys.length > 0) {
+    console.warn(
+      `[Map] Found ${duplicateKeys.length} duplicate verified signal(s) in database: ${duplicateKeys.join(', ')}. ` +
+      `These duplicates have been removed and only the first occurrence of each signal was kept.`
+    );
+  }
+
+  // Return only unique incidents (in order, keeping first occurrence)
+  return Array.from(seenKeys.values());
+};
+
+/**
+ * Fetches verified hazards from the backend API.
+ * Falls back to mock data if the API is unavailable.
+ * @returns Promise<Incident[]> Array of verified incidents from database
+ */
+const fetchVerifiedHazards = async (): Promise<Incident[]> => {
+  try {
+    const response = await fetch('/api/verified-hazards');
+    if (!response.ok) {
+      throw new Error(`API returned status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const incidents: Incident[] = data.incidents || [];
+
+    // Validate and remove any duplicate IDs from the API response
+    const deduplicated = validateAndDeduplicateIncidents(incidents);
+
+    console.log(`[Map] Loaded ${deduplicated.length} verified incidents from database`);
+    return deduplicated;
+  } catch (error) {
+    console.error('[Map] Failed to fetch verified hazards from API, falling back to mock data:', error);
+    // Fallback to mock data if API fails
+    // This ensures the app remains functional even if the backend is down
+    return MOCK_INCIDENTS;
+  }
+};
+
 export default function MapPage() {
-  const [incidents, setIncidents] = useState<TrackedIncident[]>(() => (
-    MOCK_INCIDENTS.map((incident) => ({
-      ...incident,
-      status: 'active' as IncidentStatus,
-    }))
-  ));
+  // Initialize with empty array; will be populated by useEffect
+  const [incidents, setIncidents] = useState<TrackedIncident[]>([]);
+  // Track if we're still loading incidents from the API
+  const [isLoading, setIsLoading] = useState(true);
   const [ui, setUi] = useState<MapUiState>({
     selectedIncident: null,
     panelIncident: null,
@@ -124,6 +188,34 @@ export default function MapPage() {
   const [viewRequest, setViewRequest] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const closeTimerRef = useRef<number | null>(null);
+
+  // Fetch verified hazards from database on component mount
+  useEffect(() => {
+    let isMounted = true; // Prevent state updates if component unmounts before fetch completes
+
+    const loadHazards = async () => {
+      setIsLoading(true);
+      const fetchedIncidents = await fetchVerifiedHazards();
+
+      // Only update state if component is still mounted
+      if (isMounted) {
+        // Convert fetched Incidents to TrackedIncidents by adding status field
+        const trackedIncidents = fetchedIncidents.map((incident) => ({
+          ...incident,
+          status: 'active' as IncidentStatus,
+        }));
+        setIncidents(trackedIncidents);
+        setIsLoading(false);
+      }
+    };
+
+    loadHazards();
+
+    // Cleanup function: set isMounted to false when component unmounts
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Empty dependency array means this runs only once on mount
 
   const chipCounts = FILTERS.reduce<Record<FilterKey, number>>((acc, filter) => {
     acc[filter] = filter === 'All'
@@ -253,7 +345,9 @@ export default function MapPage() {
     if (!ui.selectedHazardType) return 'All';
     if (ui.selectedHazardType === 'Other') return 'Other';
 
-    const incidentForType = MOCK_INCIDENTS.find((incident) => incident.type === ui.selectedHazardType);
+    // Find the first incident with the selected hazard type
+    // This determines which filter tab is currently active
+    const incidentForType = incidents.find((incident) => incident.type === ui.selectedHazardType);
     return incidentForType ? getFilterKey(incidentForType) : 'Other';
   };
 

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ImagePlus, MapPin, XCircle } from 'lucide-react';
 import LiveMapEmbed from '../components/LiveMapEmbed';
+import { MOCK_INCIDENTS } from '../data/incidents';
+import type { Incident } from '../data/incidents';
 
 type ReportView = 'form' | 'loading' | 'result' | 'error';
 type ConfidenceTier = 'HIGH' | 'MEDIUM' | 'LOW';
@@ -53,6 +55,49 @@ interface ReportForm {
 interface ReportProps {
   onNavigate: (page: string) => void;
 }
+
+type IncidentApiResponse = {
+  status: string;
+  count: number;
+  incidents: Incident[];
+};
+
+const dedupeIncidents = (incidents: Incident[]) => {
+  const seenKeys = new Set<string>();
+  const deduped: Incident[] = [];
+
+  for (const incident of incidents) {
+    const signalId = typeof (incident as Incident & { signalId?: number }).signalId === 'number'
+      ? (incident as Incident & { signalId?: number }).signalId
+      : null;
+    const key = signalId == null ? `id:${incident.id}` : `signal:${signalId}`;
+
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    deduped.push(incident);
+  }
+
+  return deduped;
+};
+
+const loadVerifiedIncidents = async (): Promise<Incident[]> => {
+  try {
+    const response = await fetch('/api/verified-hazards');
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+
+    const payload = (await response.json()) as IncidentApiResponse;
+    const incidents = Array.isArray(payload.incidents) ? payload.incidents : [];
+    const deduped = dedupeIncidents(incidents);
+
+    console.log(`[Report] Loaded ${deduped.length} verified incidents from database`);
+    return deduped;
+  } catch (error) {
+    console.error('[Report] Falling back to mock incidents because verified hazards could not be loaded:', error);
+    return MOCK_INCIDENTS;
+  }
+};
 
 const loadingMessages = [
   'Reading your report...',
@@ -109,12 +154,30 @@ export default function Report({ onNavigate }: ReportProps) {
   const [form, setForm] = useState<ReportForm>({ description: '', image: null });
   const [lat, setLat] = useState(43.6532);
   const [lon, setLon] = useState(-79.3832);
+  const [incidents, setIncidents] = useState<Incident[]>(MOCK_INCIDENTS);
   const [response, setResponse] = useState<ReportResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const [messageIndex, setMessageIndex] = useState(0);
   const imagePreview = useMemo(() => form.image ? URL.createObjectURL(form.image) : null, [form.image]);
   const reportLocation = useMemo(() => ({ lat, lon }), [lat, lon]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateIncidents = async () => {
+      const verifiedIncidents = await loadVerifiedIncidents();
+      if (!cancelled) {
+        setIncidents(verifiedIncidents);
+      }
+    };
+
+    hydrateIncidents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (view !== 'loading') return;
@@ -527,6 +590,7 @@ export default function Report({ onNavigate }: ReportProps) {
           </div>
           <LiveMapEmbed
             height="calc(100vh - 56px)"
+            incidents={incidents}
             reportLocation={reportLocation}
             onReportLocationChange={(location) => {
               setLat(location.lat);

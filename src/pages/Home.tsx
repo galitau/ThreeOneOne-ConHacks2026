@@ -5,18 +5,57 @@ import { MOCK_INCIDENTS } from '../data/incidents';
 import type { Incident } from '../data/incidents';
 import cityBg from '../../cityfinal.png';
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-const totalReports = MOCK_INCIDENTS.reduce((a, i) => a + i.reports, 0);
-const highCount    = MOCK_INCIDENTS.filter(i => i.conf === 'high').length;
-const avgCluster   = Math.round(totalReports / MOCK_INCIDENTS.length);
+type IncidentApiResponse = {
+  status: string;
+  count: number;
+  incidents: Incident[];
+};
 
+const dedupeIncidents = (incidents: Incident[]) => {
+  const seenKeys = new Set<string>();
+  const deduped: Incident[] = [];
+
+  for (const incident of incidents) {
+    const signalId = typeof (incident as Incident & { signalId?: number }).signalId === 'number'
+      ? (incident as Incident & { signalId?: number }).signalId
+      : null;
+    const key = signalId == null ? `id:${incident.id}` : `signal:${signalId}`;
+
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    deduped.push(incident);
+  }
+
+  return deduped;
+};
+
+const loadVerifiedIncidents = async (): Promise<Incident[]> => {
+  try {
+    const response = await fetch('/api/verified-hazards');
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}`);
+    }
+
+    const payload = (await response.json()) as IncidentApiResponse;
+    const incidents = Array.isArray(payload.incidents) ? payload.incidents : [];
+    const deduped = dedupeIncidents(incidents);
+
+    console.log(`[Home] Loaded ${deduped.length} verified incidents from database`);
+    return deduped;
+  } catch (error) {
+    console.error('[Home] Falling back to mock incidents because verified hazards could not be loaded:', error);
+    return MOCK_INCIDENTS;
+  }
+};
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 const CONF_COLOR = { high: '#ff4444', medium: '#f5a623', low: '#6b7280' } as const;
 
 // The "How it works" pipeline content removed per request
 
 // ── Ticker ────────────────────────────────────────────────────────────────────
-function Ticker() {
-  const items = MOCK_INCIDENTS.flatMap(i => [
+function Ticker({ incidents }: { incidents: Incident[] }) {
+  const items = incidents.flatMap(i => [
     `${i.icon} ${i.type} · ${i.conf.toUpperCase()} · ${i.time}`,
   ]);
   const doubled = [...items, ...items];
@@ -105,6 +144,8 @@ function IncidentFeedCard({ inc }: { inc: Incident }) {
 // ── Main Homepage ─────────────────────────────────────────────────────────────
 export default function Home({ onNavigate }: { onNavigate: (page: string) => void }) {
   const [visible, setVisible] = useState(false);
+  const [incidents, setIncidents] = useState<Incident[]>(MOCK_INCIDENTS);
+  const [isLoadingIncidents, setIsLoadingIncidents] = useState(true);
   const heroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -112,11 +153,35 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
     return () => clearTimeout(t);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateIncidents = async () => {
+      setIsLoadingIncidents(true);
+      const verifiedIncidents = await loadVerifiedIncidents();
+
+      if (!cancelled) {
+        setIncidents(verifiedIncidents);
+        setIsLoadingIncidents(false);
+      }
+    };
+
+    hydrateIncidents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const fadeStyle = (delay: number): CSSProperties => ({
     opacity: visible ? 1 : 0,
     transform: visible ? 'none' : 'translateY(24px)',
     transition: `opacity 0.7s var(--ease) ${delay}ms, transform 0.7s var(--ease) ${delay}ms`,
   });
+
+  const totalReports = incidents.reduce((a, i) => a + i.reports, 0);
+  const highCount = incidents.filter((i) => i.conf === 'high').length;
+  const avgCluster = incidents.length > 0 ? Math.round(totalReports / incidents.length) : 0;
 
   return (
     <div style={{ paddingTop: 56, background: 'var(--bg1)' }}>
@@ -231,11 +296,11 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
       </section>
 
       {/* ── TICKER ── */}
-      <Ticker />
+      <Ticker incidents={incidents} />
 
       {/* ── STATS ── */}
       <div style={{ ...fadeStyle(320), display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg2)' }}>
-        <StatCard num={MOCK_INCIDENTS.length} label="Active Incidents" />
+        <StatCard num={isLoadingIncidents ? '...' : incidents.length} label="Active Incidents" />
         <StatCard num={highCount} label="Critical" accent="var(--red)" />
         <StatCard num={totalReports} label="Reports Processed" />
         <StatCard num={avgCluster} label="Avg. Cluster Size" />
@@ -294,12 +359,12 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
               ))}
             </div>
 
-            <LiveMapEmbed height={480} />
+            <LiveMapEmbed height={480} incidents={incidents} />
           </div>
 
           {/* Incident feed */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 480, overflowY: 'auto' }}>
-            {MOCK_INCIDENTS.map(inc => (
+            {incidents.map((inc) => (
               <IncidentFeedCard key={inc.id} inc={inc} />
             ))}
           </div>
