@@ -23,7 +23,8 @@ npm run dev
 
 ```bash
 # Test the verified hazards endpoint
-curl http://localhost:8000/api/verified-hazards
+curl http://127.0.0.1:8000/process-incoming 
+uvicorn app.main:app --reload --port 8000  
 
 # Expected response:
 {

@@ -20,6 +20,9 @@ type IncidentStatus = 'active' | 'in progress' | 'completed';
 
 type TrackedIncident = Incident & {
   status: IncidentStatus;
+  photoUrl?: string;
+  imageUrl?: string;
+  images?: string[];
 };
 
 type FilterKey =
@@ -46,7 +49,9 @@ const FILTERS: FilterKey[] = [
   'Pothole',
   'Other',
 ];
+
 const INCIDENT_DATE = '04/29/2026';
+
 const FILTER_HAZARD_TYPE: Record<Exclude<FilterKey, 'All' | 'Other'>, string> = {
   Flooding: 'Flooding',
   'Fallen Tree': 'Fallen Tree',
@@ -68,6 +73,10 @@ const statusTint: Record<Confidence, string> = {
   high: 'rgba(239, 68, 68, 0.24)',
   medium: 'rgba(245, 158, 11, 0.24)',
   low: 'rgba(107, 114, 128, 0.28)',
+};
+
+const getIncidentPhotoUrl = (incident: TrackedIncident) => {
+  return incident.photoUrl || incident.imageUrl || incident.images?.[0] || null;
 };
 
 const getFilterKey = (incident: Incident): FilterKey => {
@@ -108,14 +117,7 @@ interface MapUiState {
   selectedHazardType: string | null;
 }
 
-/**
- * Validates that all incidents have unique IDs.
- * If duplicates are found, logs them and removes duplicates by keeping first occurrence.
- * @param incidents Array of incidents to validate
- * @returns Array of incidents with duplicates removed (if any existed)
- */
 const validateAndDeduplicateIncidents = (incidents: Incident[]): Incident[] => {
-  // Create a Map to track seen IDs and store the first occurrence
   const seenKeys = new Map<string, Incident>();
   const duplicateKeys: string[] = [];
 
@@ -123,18 +125,16 @@ const validateAndDeduplicateIncidents = (incidents: Incident[]): Incident[] => {
     const signalId = typeof (incident as Incident & { signalId?: number }).signalId === 'number'
       ? (incident as Incident & { signalId?: number }).signalId
       : null;
+
     const dedupeKey = signalId == null ? `id:${incident.id}` : `signal:${signalId}`;
 
     if (seenKeys.has(dedupeKey)) {
-      // We've seen this signal before - it's a duplicate
       duplicateKeys.push(dedupeKey);
     } else {
-      // First occurrence of this signal, store it
       seenKeys.set(dedupeKey, incident);
     }
   }
 
-  // If we found duplicates, warn the developer
   if (duplicateKeys.length > 0) {
     console.warn(
       `[Map] Found ${duplicateKeys.length} duplicate verified signal(s) in database: ${duplicateKeys.join(', ')}. ` +
@@ -142,42 +142,31 @@ const validateAndDeduplicateIncidents = (incidents: Incident[]): Incident[] => {
     );
   }
 
-  // Return only unique incidents (in order, keeping first occurrence)
   return Array.from(seenKeys.values());
 };
 
-/**
- * Fetches verified hazards from the backend API.
- * Falls back to mock data if the API is unavailable.
- * @returns Promise<Incident[]> Array of verified incidents from database
- */
 const fetchVerifiedHazards = async (): Promise<Incident[]> => {
   try {
     const response = await fetch('/api/verified-hazards');
+
     if (!response.ok) {
       throw new Error(`API returned status ${response.status}`);
     }
 
     const data = await response.json();
     const incidents: Incident[] = data.incidents || [];
-
-    // Validate and remove any duplicate IDs from the API response
     const deduplicated = validateAndDeduplicateIncidents(incidents);
 
     console.log(`[Map] Loaded ${deduplicated.length} verified incidents from database`);
     return deduplicated;
   } catch (error) {
     console.error('[Map] Failed to fetch verified hazards from API, falling back to mock data:', error);
-    // Fallback to mock data if API fails
-    // This ensures the app remains functional even if the backend is down
     return MOCK_INCIDENTS;
   }
 };
 
 export default function MapPage() {
-  // Initialize with empty array; will be populated by useEffect
   const [incidents, setIncidents] = useState<TrackedIncident[]>([]);
-  // Track if we're still loading incidents from the API
   const [isLoading, setIsLoading] = useState(true);
   const [ui, setUi] = useState<MapUiState>({
     selectedIncident: null,
@@ -189,21 +178,19 @@ export default function MapPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const closeTimerRef = useRef<number | null>(null);
 
-  // Fetch verified hazards from database on component mount
   useEffect(() => {
-    let isMounted = true; // Prevent state updates if component unmounts before fetch completes
+    let isMounted = true;
 
     const loadHazards = async () => {
       setIsLoading(true);
       const fetchedIncidents = await fetchVerifiedHazards();
 
-      // Only update state if component is still mounted
       if (isMounted) {
-        // Convert fetched Incidents to TrackedIncidents by adding status field
         const trackedIncidents = fetchedIncidents.map((incident) => ({
           ...incident,
           status: 'active' as IncidentStatus,
         }));
+
         setIncidents(trackedIncidents);
         setIsLoading(false);
       }
@@ -211,11 +198,10 @@ export default function MapPage() {
 
     loadHazards();
 
-    // Cleanup function: set isMounted to false when component unmounts
     return () => {
       isMounted = false;
     };
-  }, []); // Empty dependency array means this runs only once on mount
+  }, []);
 
   const chipCounts = FILTERS.reduce<Record<FilterKey, number>>((acc, filter) => {
     acc[filter] = filter === 'All'
@@ -236,14 +222,17 @@ export default function MapPage() {
   });
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
+
   const visibleIncidents = incidents.filter((incident) => {
     const matchesFilter = !ui.selectedHazardType
       || (ui.selectedHazardType === 'Other'
         ? getFilterKey(incident) === 'Other'
         : incident.type === ui.selectedHazardType);
+
     const matchesSearch = !normalizedSearch
       || incident.type.toLowerCase().includes(normalizedSearch)
       || incident.desc.toLowerCase().includes(normalizedSearch);
+
     return matchesFilter && matchesSearch;
   });
 
@@ -261,6 +250,7 @@ export default function MapPage() {
       detailPanelOpen: true,
       selectedHazardType: trackedIncident.type,
     });
+
     setViewRequest((request) => request + 1);
   }, []);
 
@@ -270,12 +260,14 @@ export default function MapPage() {
       if (!confirmed) return;
 
       setIncidents((current) => current.filter((incident) => incident.id !== incidentId));
+
       setUi((current) => ({
         ...current,
         selectedIncident: current.selectedIncident?.id === incidentId ? null : current.selectedIncident,
         panelIncident: current.panelIncident?.id === incidentId ? null : current.panelIncident,
         detailPanelOpen: current.panelIncident?.id === incidentId ? false : current.detailPanelOpen,
       }));
+
       setViewRequest((request) => request + 1);
       return;
     }
@@ -300,7 +292,6 @@ export default function MapPage() {
       window.clearTimeout(closeTimerRef.current);
     }
 
-    // Start close animation; keep `panelIncident` mounted until transition end.
     setUi((current) => ({
       selectedIncident: null,
       panelIncident: current.panelIncident,
@@ -322,21 +313,12 @@ export default function MapPage() {
 
     const nextHazardType = filter === 'Other' ? 'Other' : FILTER_HAZARD_TYPE[filter];
 
-    if (filter === 'Other') {
-      setUi({
-        selectedIncident: null,
-        panelIncident: null,
-        detailPanelOpen: false,
-        selectedHazardType: nextHazardType,
-      });
-    } else {
-      setUi({
-        selectedIncident: null,
-        panelIncident: null,
-        detailPanelOpen: false,
-        selectedHazardType: nextHazardType,
-      });
-    }
+    setUi({
+      selectedIncident: null,
+      panelIncident: null,
+      detailPanelOpen: false,
+      selectedHazardType: nextHazardType,
+    });
 
     setViewRequest((request) => request + 1);
   };
@@ -345,8 +327,6 @@ export default function MapPage() {
     if (!ui.selectedHazardType) return 'All';
     if (ui.selectedHazardType === 'Other') return 'Other';
 
-    // Find the first incident with the selected hazard type
-    // This determines which filter tab is currently active
     const incidentForType = incidents.find((incident) => incident.type === ui.selectedHazardType);
     return incidentForType ? getFilterKey(incidentForType) : 'Other';
   };
@@ -360,6 +340,7 @@ export default function MapPage() {
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+
       if (closeTimerRef.current) {
         window.clearTimeout(closeTimerRef.current);
       }
@@ -406,8 +387,12 @@ export default function MapPage() {
           }}>
             <Icon size={18} strokeWidth={2.2} />
           </div>
+
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: 'var(--text-primary)', fontSize: 14, fontWeight: 800, lineHeight: 1.2 }}>{inc.type}</div>
+            <div style={{ color: 'var(--text-primary)', fontSize: 14, fontWeight: 800, lineHeight: 1.2 }}>
+              {inc.type}
+            </div>
+
             <div style={{
               color: 'var(--text-secondary)',
               fontSize: 12,
@@ -419,6 +404,7 @@ export default function MapPage() {
             }}>
               {inc.desc}
             </div>
+
             <div style={{ color: 'var(--text-tertiary)', fontSize: 11, marginTop: 9 }}>
               {inc.reports} reports · {inc.time}
             </div>
@@ -430,40 +416,62 @@ export default function MapPage() {
 
   const FieldBlock = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div>
-      <div style={{ color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+      <div style={{
+        color: 'var(--text-tertiary)',
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+      }}>
         {label}
       </div>
-      <div style={{ color: 'var(--text-primary)', fontSize: 16, lineHeight: 1.45, marginTop: 6 }}>
+
+      <div style={{
+        color: 'var(--text-primary)',
+        fontSize: 16,
+        lineHeight: 1.45,
+        marginTop: 6,
+      }}>
         {children}
       </div>
     </div>
   );
 
-  const DetailPanel = ({ incident, open, onAfterClose }: { incident: TrackedIncident; open: boolean; onAfterClose?: () => void }) => {
+  const DetailPanel = ({
+    incident,
+    open,
+    onAfterClose,
+  }: {
+    incident: TrackedIncident;
+    open: boolean;
+    onAfterClose?: () => void;
+  }) => {
     const color = statusColor[incident.conf];
+    const photoUrl = getIncidentPhotoUrl(incident);
 
     return (
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        bottom: 0,
-        width: 380,
-        background: 'var(--bg-card)',
-        borderRight: '1px solid var(--border)',
-        boxShadow: '16px 0 34px rgba(0, 0, 0, 0.32)',
-        transform: open ? 'translateX(0)' : 'translateX(-100%)',
-        transition: 'transform 250ms ease-out',
-        zIndex: 5,
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-      onTransitionEnd={(e) => {
-        // When the panel has finished sliding out, notify parent to unmount it.
-        if (e.propertyName === 'transform' && !open) {
-          onAfterClose?.();
-        }
-      }}>
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          bottom: 0,
+          width: 380,
+          background: 'var(--bg-card)',
+          borderRight: '1px solid var(--border)',
+          boxShadow: '16px 0 34px rgba(0, 0, 0, 0.32)',
+          transform: open ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 250ms ease-out',
+          zIndex: 5,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+        onTransitionEnd={(e) => {
+          if (e.propertyName === 'transform' && !open) {
+            onAfterClose?.();
+          }
+        }}
+      >
         <div style={{
           height: 80,
           background: statusTint[incident.conf],
@@ -489,6 +497,7 @@ export default function MapPage() {
           >
             <ChevronLeft size={19} />
           </button>
+
           <div style={{
             color: 'var(--text-primary)',
             fontSize: 17,
@@ -500,6 +509,7 @@ export default function MapPage() {
           }}>
             {incident.type}
           </div>
+
           <div style={{
             justifySelf: 'end',
             width: 34,
@@ -534,6 +544,37 @@ export default function MapPage() {
             {INCIDENT_DATE} {incident.type}
           </FieldBlock>
 
+          <FieldBlock label="Photo">
+            {photoUrl ? (
+              <img
+                src={photoUrl}
+                alt={`${incident.type} incident`}
+                style={{
+                  width: '100%',
+                  height: 180,
+                  objectFit: 'cover',
+                  borderRadius: 12,
+                  border: '1px solid var(--border)',
+                  display: 'block',
+                }}
+              />
+            ) : (
+              <div style={{
+                height: 140,
+                borderRadius: 12,
+                border: '1px dashed var(--border)',
+                background: 'var(--bg-card-hover)',
+                color: 'var(--text-tertiary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 13,
+              }}>
+                No photo available
+              </div>
+            )}
+          </FieldBlock>
+
           <FieldBlock label="Description">
             {incident.desc}
           </FieldBlock>
@@ -542,8 +583,20 @@ export default function MapPage() {
             <div style={{ color, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase' }}>
               {incident.conf} · {incident.score}%
             </div>
-            <div style={{ height: 5, background: '#0B1020', borderRadius: 999, overflow: 'hidden', marginTop: 10 }}>
-              <div style={{ width: `${incident.score}%`, height: '100%', background: color, borderRadius: 999 }} />
+
+            <div style={{
+              height: 5,
+              background: '#0B1020',
+              borderRadius: 999,
+              overflow: 'hidden',
+              marginTop: 10,
+            }}>
+              <div style={{
+                width: `${incident.score}%`,
+                height: '100%',
+                background: color,
+                borderRadius: 999,
+              }} />
             </div>
           </FieldBlock>
 
@@ -577,7 +630,11 @@ export default function MapPage() {
           </FieldBlock>
 
           <FieldBlock label="Status">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: 8,
+            }}>
               {([
                 { value: 'active' as const, label: 'Active', accent: '#ef4444' },
                 { value: 'in progress' as const, label: 'In Progress', accent: '#f59e0b' },
@@ -605,10 +662,23 @@ export default function MapPage() {
                 );
               })}
             </div>
-            <div style={{ marginTop: 8, color, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6 }}>
+
+            <div style={{
+              marginTop: 8,
+              color,
+              fontWeight: 800,
+              textTransform: 'uppercase',
+              letterSpacing: 0.6,
+            }}>
               Current: {incident.status}
             </div>
-            <div style={{ marginTop: 6, color: 'var(--text-tertiary)', fontSize: 12, lineHeight: 1.4 }}>
+
+            <div style={{
+              marginTop: 6,
+              color: 'var(--text-tertiary)',
+              fontSize: 12,
+              lineHeight: 1.4,
+            }}>
               Choosing Completed will remove this location after confirmation.
             </div>
           </FieldBlock>
@@ -652,7 +722,12 @@ export default function MapPage() {
         background: 'var(--bg-primary)',
       } as React.CSSProperties}
     >
-      <div style={{ display: 'grid', gridTemplateColumns: '340px minmax(0, 1fr)', height: 'calc(100vh - 56px)', minHeight: 620 }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '340px minmax(0, 1fr)',
+        height: 'calc(100vh - 56px)',
+        minHeight: 620,
+      }}>
         <aside style={{
           position: 'relative',
           zIndex: 3,
@@ -676,6 +751,7 @@ export default function MapPage() {
             color: 'var(--text-tertiary)',
           }}>
             <Search size={16} />
+
             <input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
@@ -710,21 +786,28 @@ export default function MapPage() {
                     onClick={() => selectFilter(filter)}
                     style={{
                       flex: '0 0 auto',
-                                  border: `1px solid ${active ? 'var(--accent-cyan)' : 'var(--border)'}`,
-                                  borderRadius: 999,
-                                  background: active ? 'rgba(255, 68, 68, 0.06)' : 'transparent',
-                                  color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+                      border: `1px solid ${active ? 'var(--accent-cyan)' : 'var(--border)'}`,
+                      borderRadius: 999,
+                      background: active ? 'rgba(255, 68, 68, 0.06)' : 'transparent',
+                      color: active ? 'var(--accent-cyan)' : 'var(--text-secondary)',
                       padding: '7px 10px',
                       fontSize: 12,
                       fontWeight: 800,
                       marginRight: primaryGroupEnd ? 8 : 0,
                     }}
                   >
-                    {filter} <span style={{ color: active ? 'var(--accent-cyan)' : 'var(--text-tertiary)', marginLeft: 3 }}>{chipCounts[filter]}</span>
+                    {filter}{' '}
+                    <span style={{
+                      color: active ? 'var(--accent-cyan)' : 'var(--text-tertiary)',
+                      marginLeft: 3,
+                    }}>
+                      {chipCounts[filter]}
+                    </span>
                   </button>
                 );
               })}
             </div>
+
             <div
               aria-hidden="true"
               style={{
@@ -740,18 +823,35 @@ export default function MapPage() {
           </div>
 
           <section style={{ minHeight: 0 }}>
-            <div style={{ color: 'var(--text-tertiary)', fontSize: 11, fontWeight: 800, letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 10 }}>
-              Incidents ({visibleIncidents.length})
+            <div style={{
+              color: 'var(--text-tertiary)',
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: 0.9,
+              textTransform: 'uppercase',
+              marginBottom: 10,
+            }}>
+              Incidents ({isLoading ? 'Loading...' : visibleIncidents.length})
             </div>
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {visibleIncidents.map(inc => (
-                <IncidentRow key={inc.id} inc={inc} active={inc.id === ui.selectedIncident?.id} />
+              {visibleIncidents.map((inc) => (
+                <IncidentRow
+                  key={inc.id}
+                  inc={inc}
+                  active={inc.id === ui.selectedIncident?.id}
+                />
               ))}
             </div>
           </section>
         </aside>
 
-        <div style={{ background: 'var(--bg-primary)', position: 'relative', minWidth: 0, zIndex: 0 }}>
+        <div style={{
+          background: 'var(--bg-primary)',
+          position: 'relative',
+          minWidth: 0,
+          zIndex: 0,
+        }}>
           <LiveMapEmbed
             height="100%"
             incidents={incidents}
@@ -761,9 +861,11 @@ export default function MapPage() {
             onIncidentClick={selectIncident}
             onMapClick={closeIncidentView}
           />
+
           {ui.panelIncident ? (
             <>
               {ui.detailPanelOpen ? <MapDismissLayer onDismiss={closeIncidentView} /> : null}
+
               <DetailPanel
                 incident={ui.panelIncident}
                 open={ui.detailPanelOpen}

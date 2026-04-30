@@ -56,6 +56,7 @@ def _ensure_verified_table(cursor):
             INGESTED_AT       TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
             LAT               FLOAT,
             LON               FLOAT,
+            GEOG_POINT        GEOGRAPHY,
             HAZARD_TYPE       STRING,
             DESCRIPTION       STRING,
             IS_HAZARD         BOOLEAN,
@@ -64,7 +65,7 @@ def _ensure_verified_table(cursor):
             RAW_JSON          VARIANT
         )
     """)
-    for col in ["VERIFICATION_NOTE STRING", "RAW_JSON VARIANT"]:
+    for col in ["VERIFICATION_NOTE STRING", "RAW_JSON VARIANT", "GEOG_POINT GEOGRAPHY"]:
         try: cursor.execute(f"ALTER TABLE VERIFIED_HAZARDS ADD COLUMN IF NOT EXISTS {col}")
         except: pass
 
@@ -128,13 +129,15 @@ async def _process_signal(signal, client):
             cur = conn.cursor()
             _ensure_verified_table(cur)
             # FIX: Using INSERT INTO ... SELECT to support PARSE_JSON()
+            # CRITICAL: Cast boolean to TRUE/FALSE string to ensure Snowflake boolean type conversion
+            # Populate GEOG_POINT using ST_POINT for spatial queries
             cur.execute("""
-                INSERT INTO VERIFIED_HAZARDS (SIGNAL_ID, SOURCE, LAT, LON, HAZARD_TYPE, 
+                INSERT INTO VERIFIED_HAZARDS (SIGNAL_ID, SOURCE, LAT, LON, GEOG_POINT, HAZARD_TYPE, 
                 DESCRIPTION, IS_HAZARD, CONFIDENCE_SCORE, VERIFICATION_NOTE, RAW_JSON)
-                SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s, PARSE_JSON(%s)
-            """, (sid, record["source"], record["lat"], record["lon"], record["hazard_type"],
-                  record["description"], record["is_hazard"], record["confidence_score"], 
-                  record["verification_note"], json.dumps(record)))
+                SELECT %s, %s, %s, %s, ST_POINT(%s, %s), %s, %s, TO_BOOLEAN(%s), %s, %s, PARSE_JSON(%s)
+            """, (sid, record["source"], record["lat"], record["lon"], record["lon"], record["lat"], 
+                  record["hazard_type"], record["description"], str(record["is_hazard"]).lower(), 
+                  record["confidence_score"], record["verification_note"], json.dumps(record)))
             print(f"[Sentinel] ✓ Signal {sid} verified.")
     except Exception as e:
         print(f"[Sentinel] ✗ Failed {sid}: {e}")

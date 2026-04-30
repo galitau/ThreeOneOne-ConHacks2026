@@ -359,41 +359,61 @@ def fetch_verified_hazards(cursor: snowflake.connector.cursor.SnowflakeCursor) -
     """
 
     table_name = resolve_verified_hazards_table(cursor)
+
     cursor.execute(
         """
         SELECT
             ROW_NUMBER() OVER (
-                ORDER BY SIGNAL_ID ASC
+                ORDER BY verified.SIGNAL_ID ASC
             ) AS MAP_ID,
-            SIGNAL_ID,
-            SOURCE,
-            INGESTED_AT,
-            LAT,
-            LON,
-            HAZARD_TYPE,
-            DESCRIPTION,
-            IS_HAZARD,
-            CONFIDENCE_SCORE
-        FROM {table_name}
-        WHERE IS_HAZARD = TRUE
+            verified.SIGNAL_ID,
+            verified.SOURCE,
+            verified.INGESTED_AT,
+            verified.LAT,
+            verified.LON,
+            verified.HAZARD_TYPE,
+            verified.DESCRIPTION,
+            verified.IS_HAZARD,
+            verified.CONFIDENCE_SCORE,
+            signals.IMAGE_NAME,
+            signals.IMAGE_MIME_TYPE,
+            signals.IMAGE_BASE64
+        FROM {table_name} AS verified
+        LEFT JOIN INCOMING_SIGNALS AS signals
+                ON signals.ID::STRING = verified.SIGNAL_ID
+        WHERE CAST(verified.IS_HAZARD AS BOOLEAN) = TRUE
         QUALIFY ROW_NUMBER() OVER (
-            PARTITION BY SIGNAL_ID
-            ORDER BY CONFIDENCE_SCORE DESC, INGESTED_AT DESC, LAT DESC, LON DESC
+            PARTITION BY verified.SIGNAL_ID
+            ORDER BY verified.CONFIDENCE_SCORE DESC, verified.INGESTED_AT DESC, verified.LAT DESC, verified.LON DESC
         ) = 1
-        ORDER BY SIGNAL_ID ASC, INGESTED_AT DESC, LAT DESC, LON DESC
+        ORDER BY verified.SIGNAL_ID ASC, verified.INGESTED_AT DESC, verified.LAT DESC, verified.LON DESC
         """.format(table_name=table_name)
     )
 
-    incidents_by_signal: dict[int, tuple[float, Any, dict[str, Any]]] = {}
+    incidents_by_signal: dict[str, tuple[float, Any, dict[str, Any]]] = {}
     for row in cursor.fetchall():
-        signal_id = int(row[1])
-        source = str(row[2]) if row[2] is not None else ""
-        ingested_at = row[3]
-        lat = float(row[4])
-        lon = float(row[5])
-        display_type = normalize_hazard_type(row[6], row[7])
-        description = str(row[7]) if row[7] is not None else ""
-        confidence_tier, confidence_score = normalize_confidence(row[9])
+        try:
+            # SIGNAL_ID is stored as a string (UUID). Keep it as string to avoid
+            # ValueError when converting non-numeric IDs to int.
+            signal_id = str(row[1])
+            source = str(row[2]) if row[2] is not None else ""
+            ingested_at = row[3]
+            lat = float(row[4])
+            lon = float(row[5])
+            display_type = normalize_hazard_type(row[6], row[7])
+            description = str(row[7]) if row[7] is not None else ""
+            confidence_tier, confidence_score = normalize_confidence(row[9])
+            image_name = str(row[10]) if row[10] is not None else ""
+            image_mime_type = str(row[11]) if row[11] is not None else ""
+            image_base64 = str(row[12]) if row[12] is not None else ""
+        except (TypeError, ValueError):
+            continue
+
+        photo_url = None
+        if image_base64:
+            mime_type = image_mime_type or "image/jpeg"
+            photo_url = f"data:{mime_type};base64,{image_base64}"
+
         incident = {
             "signalId": signal_id,
             "type": display_type,
@@ -402,7 +422,10 @@ def fetch_verified_hazards(cursor: snowflake.connector.cursor.SnowflakeCursor) -
             "conf": confidence_tier,
             "score": confidence_score,
             "reports": 1,
-            "hasImage": False,
+            "hasImage": bool(image_base64),
+            "photoUrl": photo_url,
+            "photoName": image_name or None,
+            "photoMimeType": image_mime_type or None,
             "sources": parse_sources(source),
             "time": format_relative_time(ingested_at),
             "desc": description,

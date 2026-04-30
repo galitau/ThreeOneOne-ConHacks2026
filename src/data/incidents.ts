@@ -15,6 +15,9 @@ export interface Incident {
   time: string;
   desc: string;
   icon: string;
+  photoUrl?: string | null;
+  photoName?: string | null;
+  photoMimeType?: string | null;
 }
 
 export const MOCK_INCIDENTS: Incident[] = [
