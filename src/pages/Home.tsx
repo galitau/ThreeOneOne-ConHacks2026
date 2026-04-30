@@ -271,19 +271,19 @@ export default function Home({ onNavigate }: { onNavigate: (page: string) => voi
             color: '#000',
             textShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
           }}>
-            Cities that see<br />
-            <span style={{ color: 'var(--accent)' }}>threats coming</span><br />
-            act faster.
+            Cities
+            <span style={{ color: 'var(--accent)' }}> Shouldn't Wait </span><br />
+             for 311 Calls to Know There's a Problem.
           </h1>
 
           {/* Subhead */}
           <p style={{
             ...fadeStyle(160),
-            fontSize: 17, color: 'rgba(0,0,0,0.72)', lineHeight: 1.75,
-            maxWidth: 520, margin: '0 auto 44px',
+            fontSize: 20, color: 'rgba(0,0,0,0.72)', lineHeight: 1.75,
+            maxWidth: 650, margin: '0 auto 20px',
             textShadow: '0 1px 2px rgba(0, 0, 0, 0.06)',
           }}>
-            ThreeOneOne aggregates social signals and citizen reports to surface verified hazards — before a single 311 call is made.
+            ThreeOneOne detects hazards in real time, before they're reported.
           </p>
 
           {/* CTAs */}
