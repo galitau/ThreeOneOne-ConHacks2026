@@ -57,7 +57,8 @@ SNOWFLAKE_WAREHOUSE = get_env_or_placeholder("SNOWFLAKE_WAREHOUSE", "<YOUR_SNOWF
 
 TARGET_TABLE = "THREE_ONE_ONE.RAW.INCOMING_SIGNALS"
 HOST = os.getenv("REPORT_API_HOST", "127.0.0.1")
-PORT = int(os.getenv("REPORT_API_PORT", "8000"))
+# Keep report API off FastAPI's default port to avoid local routing conflicts.
+PORT = int(os.getenv("REPORT_API_PORT", "8001"))
 
 
 def validate_configuration() -> None:
